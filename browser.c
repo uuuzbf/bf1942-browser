@@ -21,7 +21,7 @@ enum {
 };
 
 // defined in show_console.c
-void init_console();
+void InitConsole();
 
 void ReloadServers();
 void PulseTimer();
@@ -418,7 +418,9 @@ void PulseTimer()
 
 int WinMain(HINSTANCE instance, HINSTANCE previnstance, LPSTR commandline, int cmdshow)
 {
-    init_console();
+#ifdef DEBUG
+    InitConsole();
+#endif
 
     INITCOMMONCONTROLSEX cc;
     cc.dwICC = ICC_LISTVIEW_CLASSES;

@@ -119,7 +119,7 @@ void BindCrtHandlesToStdHandles(bool bindStdIn, bool bindStdOut, bool bindStdErr
     }
 }
 
-void init_console()
+void InitConsole()
 {
     AllocConsole();
     BindCrtHandlesToStdHandles(true, true, true);
