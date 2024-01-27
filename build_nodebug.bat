@@ -1,0 +1,1 @@
+cl /nologo /W4 /WX /wd5105 /wd4201 /wd4100 /std:c11 /O2 /Z7 /Zo /D_CRT_SECURE_NO_WARNINGS browser.c query.c show_console.c cjson/cJSON.c user32.lib gdi32.lib Comdlg32.lib Comctl32.lib winhttp.lib /link /opt:ref /PDBALTPATH:%%_PDB%%
