@@ -1,0 +1,1 @@
+cl /nologo -Z7 -Zo browser.c query.c show_console.c cjson/cJSON.c user32.lib gdi32.lib Comdlg32.lib Comctl32.lib winhttp.lib

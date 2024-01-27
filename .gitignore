@@ -1,0 +1,8 @@
+.vscode
+*.ilk
+*.obj
+*.exe
+*.exp
+*.lib
+*.pdb
+bf1942_path.txt
