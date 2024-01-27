@@ -257,25 +257,28 @@ char* GetServerList(DWORD* length)
     // http://master.bf1942.org/json/?full
     // use WINHTTP_ACCESS_TYPE_AUTOMATIC_PROXY? Win8.1+ only
     // flag WINHTTP_FLAG_ASYNC exists, will be useful later
-    HINTERNET session = WinHttpOpen(0, WINHTTP_ACCESS_TYPE_DEFAULT_PROXY, WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0 /* flags */);
+    HINTERNET session = 0, connect = 0, request = 0;
+    char* body = 0;
+    bool result = false;
+    session = WinHttpOpen(0, WINHTTP_ACCESS_TYPE_DEFAULT_PROXY, WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0 /* flags */);
     if(session == 0){
         printf("failed to create winhttp session\n");
         goto cleanup;
     }
-    HINTERNET connect = WinHttpConnect(session, L"master.bf1942.org", INTERNET_DEFAULT_PORT, 0);
+    connect = WinHttpConnect(session, L"master.bf1942.org", INTERNET_DEFAULT_PORT, 0);
     if(connect == 0){
         printf("failed to create winhttp connect\n");
         goto cleanup;
     }
     // flag WINHTTP_FLAG_SECURE may be useful later
     // https://learn.microsoft.com/en-us/windows/win32/api/winhttp/nf-winhttp-winhttpopenrequest
-    HINTERNET request = WinHttpOpenRequest(connect, L"GET", L"/json/?full", 0 /* HTTP 1.1 */, WINHTTP_NO_REFERER, WINHTTP_DEFAULT_ACCEPT_TYPES, 0);
+    request = WinHttpOpenRequest(connect, L"GET", L"/json/?full", 0 /* HTTP 1.1 */, WINHTTP_NO_REFERER, WINHTTP_DEFAULT_ACCEPT_TYPES, 0);
     if(request == 0){
         printf("failed to create winhttp request\n");
         goto cleanup;
     }
     // https://learn.microsoft.com/en-us/windows/win32/api/winhttp/nf-winhttp-winhttpsendrequest
-    bool result = WinHttpSendRequest(request, 0, 0, 0, 0, 0, 0);
+    result = WinHttpSendRequest(request, 0, 0, 0, 0, 0, 0);
     if(!result){
         printf("request failed!\n");
         goto cleanup;
@@ -288,7 +291,6 @@ char* GetServerList(DWORD* length)
         goto cleanup;
     }
 
-    char* body = 0;
     DWORD body_length = 0;
     for(;;){
         DWORD bytes;
@@ -416,7 +418,7 @@ void PulseTimer()
     printf("pulse\n");
 }
 
-int WinMain(HINSTANCE instance, HINSTANCE previnstance, LPSTR commandline, int cmdshow)
+int __stdcall WinMain(HINSTANCE instance, HINSTANCE previnstance, LPSTR commandline, int cmdshow)
 {
 #ifdef DEBUG
     InitConsole();
@@ -502,7 +504,7 @@ int WinMain(HINSTANCE instance, HINSTANCE previnstance, LPSTR commandline, int c
 
     ReloadServers();
 
-    CreateThread(0, 0, QueryThreadMain, 0, 0, 0);
+    //CreateThread(0, 0, QueryThreadMain, 0, 0, 0);
     MSG msg;
     int res;
     while((res = GetMessage(&msg, mainwindow, 0, 0)) != 0){
