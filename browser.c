@@ -73,6 +73,15 @@ void initBF1942Path()
         }
 
     }
+    else {
+        h = fopen("BF1942.exe", "rb");
+        if(h){
+            fclose(h);
+            // bf1942.exe is right next to ours, set path to .\bf1942.exe
+            wcscpy(bf1942_path, L".\\BF1942.exe");
+            return;
+        }
+    }
     // we dont have a BF1942.exe path, ask the user
     OPENFILENAME of = {0};
     bf1942_path[0] = 0;
