@@ -1,5 +1,6 @@
 #define UNICODE 1
 #define WIN32_LEAN_AND_MEAN
+#define _WINSOCK_DEPRECATED_NO_WARNINGS
 #include <windows.h>
 #include <CommCtrl.h>
 #include <commdlg.h>
@@ -15,6 +16,7 @@ enum {
     ID_SERVERLIST = 100,
     ID_PLAYERLIST,
     ID_ADDRESSLABEL,
+    ID_SERVERINFOLABEL,
     ID_REFRESHBTN,
     ID_PULSE_TIMER,
     ID_SECOND_TIMER
@@ -43,7 +45,9 @@ HWND mainwindow = 0;
 HWND serverlist = 0;
 HWND playerlist = 0;
 HWND addresslabel = 0;
-cJSON* serverdata = 0;
+HWND serverinfolabel = 0;
+//cJSON* serverdata = 0;
+struct QueryState* queryState = 0;
 
 
 void initBF1942Path()
@@ -94,74 +98,89 @@ void initBF1942Path()
     // no path
 }
 
+int GetSelectedServerID()
+{
+    // somebody on the internet said to not trust this
+    // ListView_GetSelectionMark(serverlist);
+    return ListView_GetNextItem(serverlist, -1, LVNI_SELECTED);
+}
+
+struct QueryServer* GetSelectedServer()
+{
+    int selectedServer = GetSelectedServerID();
+    //printf("ConnectToServer selectedServer = %d\n", selectedServer);
+    if(selectedServer < 0) return 0;
+    
+    struct QueryServer* svr = GetServerByIndex(selectedServer);
+    if(!svr){
+        printf("GetSelectedServer - unknown server\n");
+        return 0;
+    }
+    return svr;
+}
+
 void SelectServer(int index){
     printf("selecting server %d\n", index);
     ListView_DeleteAllItems(playerlist);
-    cJSON* server = cJSON_GetArrayItem(serverdata, index);
-    if(!server) return;
-    cJSON* query = cJSON_GetObjectItem(server, "query");
-    if(!query) return;
 
+    struct QueryServer* svr = GetServerByIndex(index);
+    if(!svr){
+        printf("ConnectToServer - unknown server\n");
+        return;
+    }
+
+    WaitForSingleObject(queryState->mutex, INFINITE);
     WCHAR address[32];
-    cJSON* IP = cJSON_GetObjectItem(server, "IP");
-    cJSON* hostport = cJSON_GetObjectItem(query, "hostport");
-    _snwprintf(address, 32, L"%hs:%d", cJSON_GetStringValue(IP), (int)cJSON_GetNumberValue(hostport)); // %hs is MSVC specific
+    _snwprintf(address, 32, L"%hs:%d", inet_ntoa(svr->queryAddress.sin_addr), svr->hostPort); // %hs is MSVC specific
     SetWindowText(addresslabel, address);
 
-    cJSON* players = cJSON_GetObjectItem(query, "players");
-    if(!players) return;
-    int numPlayers = cJSON_GetArraySize(players);
+    // query info when server selected
+    svr->needInfo = true;
 
-    for(int i = 0; i < numPlayers; i++){
-        cJSON* player = cJSON_GetArrayItem(players, i);
-        if(!player) continue;
-        cJSON* playername = cJSON_GetObjectItem(player, "playername");
-        cJSON* score = cJSON_GetObjectItem(player, "score");
-        cJSON* ping = cJSON_GetObjectItem(player, "ping");
-        WCHAR scorestr[16], pingstr[16];
-        _snwprintf(scorestr, 16, L"%d", (int)cJSON_GetNumberValue(score));
-        _snwprintf(pingstr, 16, L"%d", (int)cJSON_GetNumberValue(ping));
+    // if there are no players on the server this array will be missing
+    if(svr->players != 0){
+        for(int i = 0; i < svr->playersLength; i++){
+            struct QueryPlayer* player = svr->players + i;
 
-        LV_ITEM li = {0};
-        li.mask = LVIF_TEXT;
-        li.iItem = i; // row number
-        li.iSubItem = 0; // player name
-        li.pszText = utf8ToWide(cJSON_GetStringValue(playername));
-        ListView_InsertItem(playerlist, &li);
-        li.iSubItem = 1; // score
-        li.pszText = scorestr;
-        ListView_SetItem(playerlist, &li);
-        li.iSubItem = 2; // ping
-        li.pszText = pingstr;
-        ListView_SetItem(playerlist, &li);
+            WCHAR scorestr[16], pingstr[16];
+            _snwprintf(scorestr, 16, L"%d", player->score);
+            _snwprintf(pingstr, 16, L"%d", player->ping);
+
+            LV_ITEM li = {0};
+            li.mask = LVIF_TEXT;
+            li.iItem = i; // row number
+            li.iSubItem = 0; // player name
+            li.pszText = player->name;
+            ListView_InsertItem(playerlist, &li);
+            li.iSubItem = 1; // score
+            li.pszText = scorestr;
+            ListView_SetItem(playerlist, &li);
+            li.iSubItem = 2; // ping
+            li.pszText = pingstr;
+            ListView_SetItem(playerlist, &li);
+
+            WCHAR serverinfo[64];
+            _snwprintf(serverinfo, 64, L"Axis: %d Allies: %d Timer: %d:%02d", svr->tickets[0], svr->tickets[1], svr->roundTimeRemaining / 60, svr->roundTimeRemaining % 60);
+            SetWindowText(serverinfolabel, serverinfo);
+        }
     }
+    ReleaseMutex(queryState->mutex);
 }
 
 void ConnectToServer()
 {
-    // somebody on the internet said to not trust this
-    // int selectedServer = ListView_GetSelectionMark(serverlist);
-    int selectedServer = ListView_GetNextItem(serverlist, -1, LVNI_SELECTED);
-    printf("connectToServer selectedServer = %d\n", selectedServer);
-    if(selectedServer < 0) return;
+    struct QueryServer* svr = GetSelectedServer();
+    if(!svr){
+        return;
+    }
 
     if(!bf1942_path[0]){
         initBF1942Path();
         if(!bf1942_path[0]) return;
     }
-    
-
-    cJSON* server = cJSON_GetArrayItem(serverdata, selectedServer);
-    if(!server) return;
-    cJSON* query = cJSON_GetObjectItem(server, "query");
-    if(!query) return;
 
     WCHAR exe_args[256];
-    cJSON* IP = cJSON_GetObjectItem(server, "IP");
-    cJSON* hostport = cJSON_GetObjectItem(query, "hostport");
-    cJSON* gameId = cJSON_GetObjectItem(query, "gameId");
-    _snwprintf(exe_args, 256, L"BF1942.exe +restart 1 +joinServer %hs:%d +game %hs", cJSON_GetStringValue(IP), (int)cJSON_GetNumberValue(hostport), cJSON_GetStringValue(gameId)); // %hs is MSVC specific
-    
+    _snwprintf(exe_args, 256, L"BF1942.exe +restart 1 +joinServer %hs:%d +game %ls", inet_ntoa(svr->queryAddress.sin_addr), svr->hostPort, svr->modname); // %hs is MSVC specific
 
     WCHAR bf_dir[1024] = {0};
     WCHAR* dirslash = wcsrchr(bf1942_path, '\\');
@@ -237,13 +256,22 @@ LRESULT __stdcall WndProcMain(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
                 ReloadServers();
             }
             break;
-        case WM_SETFOCUS:
-            SetTimer(mainwindow, ID_PULSE_TIMER, 200, 0);
-            SetTimer(mainwindow, ID_SECOND_TIMER, 1000, 0);
-            break;
-        case WM_KILLFOCUS:
-            KillTimer(mainwindow, ID_PULSE_TIMER);
-            KillTimer(mainwindow, ID_SECOND_TIMER);
+        //case WM_SETFOCUS:
+        //    printf("SETFOCUS %08X -> %p\n", wParam, hwnd);
+        //    break;
+        //case WM_KILLFOCUS:
+        //    printf("KILLFOCUS %p -> %08X\n", hwnd, wParam);
+        //    break;
+        case WM_ACTIVATE:
+        //    printf("ACTIVATE %p state %d to %08X\n", hwnd, wParam, lParam);
+            if(wParam == WA_ACTIVE || wParam == WA_CLICKACTIVE){
+                SetTimer(mainwindow, ID_PULSE_TIMER, 200, 0);
+                SetTimer(mainwindow, ID_SECOND_TIMER, 2000, 0);
+            }
+            else if(wParam == WA_INACTIVE){
+                KillTimer(mainwindow, ID_PULSE_TIMER);
+                KillTimer(mainwindow, ID_SECOND_TIMER);
+            }
             break;
         case WM_NOTIFY:{
             if(wParam == 100){
@@ -339,7 +367,8 @@ cleanup:
     return body;
 }
 
-void LoadServerList(char* json, DWORD length)
+// needs query mutex lock
+void LoadServerListFromJSON(char* json, DWORD length)
 {
     cJSON* root = cJSON_ParseWithLength(json, length);
     if(root == 0){
@@ -352,24 +381,84 @@ void LoadServerList(char* json, DWORD length)
         goto cleanup;
     }
 
+    // clear the lists now because clearing the QueryServers will break the lists anyway
     ListView_DeleteAllItems(serverlist);
     ListView_DeleteAllItems(playerlist);
     SetWindowText(addresslabel, L"Select a server");
 
+    RemoveAllServers();
+
     for(int i = 0; i < cJSON_GetArraySize(root); i++){
         cJSON* server = cJSON_GetArrayItem(root, i);
         cJSON* query = cJSON_GetObjectItem(server, "query");
-        if(!query) { printf("malformed server data\n"); continue; }
-        cJSON* hostname = cJSON_GetObjectItem(query, "hostname");
-        cJSON* maxplayers = cJSON_GetObjectItem(query, "maxplayers");
-        cJSON* numplayers = cJSON_GetObjectItem(query, "numplayers");
-        cJSON* mapname = cJSON_GetObjectItem(query, "mapname");
-        cJSON* gametype = cJSON_GetObjectItem(query, "gametype");
-        cJSON* gameId = cJSON_GetObjectItem(query, "gameId");
-        if(!(hostname && maxplayers && numplayers && mapname && gametype && gameId)) { printf("malformed query data\n"); continue; }
+        cJSON* queryPort = cJSON_GetObjectItem(server, "queryPort");
+        if(!query || !queryPort) { printf("malformed server data\n"); continue; }
+        cJSON* IP = cJSON_GetObjectItem(server, "IP");
+        cJSON* hostport = cJSON_GetObjectItem(query, "hostport");
+        if(!(IP && hostport)) { printf("malformed query data\n"); continue; }
 
+        struct QueryServer* svr = AddServer(cJSON_GetStringValue(IP), (unsigned short)cJSON_GetNumberValue(queryPort));
+        if(!svr){
+            printf("AddServer failed for %s:%d\n", cJSON_GetStringValue(IP), (int)cJSON_GetNumberValue(queryPort));
+            continue;
+        }
+        svr->hostPort = (int)cJSON_GetNumberValue(hostport);
+        svr->maxPlayers = (int)cJSON_GetNumberValue(cJSON_GetObjectItem(query, "maxplayers"));
+        svr->playerCount = (int)cJSON_GetNumberValue(cJSON_GetObjectItem(query, "numplayers"));
+        utf8ToWideBuffer(cJSON_GetStringValue(cJSON_GetObjectItem(query, "hostname")), svr->hostname, ARRAYSIZE(svr->hostname));
+        utf8ToWideBuffer(cJSON_GetStringValue(cJSON_GetObjectItem(query, "mapname")), svr->mapname, ARRAYSIZE(svr->mapname));
+        utf8ToWideBuffer(cJSON_GetStringValue(cJSON_GetObjectItem(query, "gameId")), svr->modname, ARRAYSIZE(svr->modname));
+        utf8ToWideBuffer(cJSON_GetStringValue(cJSON_GetObjectItem(query, "gametype")), svr->gamemode, ARRAYSIZE(svr->gamemode));
+        svr->tickets[0] = (int)cJSON_GetNumberValue(cJSON_GetObjectItem(query, "tickets1"));
+        svr->tickets[1] = (int)cJSON_GetNumberValue(cJSON_GetObjectItem(query, "tickets2"));
+        svr->roundTimeRemaining = (int)cJSON_GetNumberValue(cJSON_GetObjectItem(query, "roundTimeRemain"));
+        svr->punkbuster = cJSON_IsTrue(cJSON_GetObjectItem(query, "sv_punkbuster"));
+        svr->passworded = cJSON_IsTrue(cJSON_GetObjectItem(query, "password"));
+
+        // request info query from server
+        svr->needInfo = true;
+
+        cJSON* jplayers = cJSON_GetObjectItem(query, "players");
+        if(!jplayers){
+            printf("%s:%d has no playerlist\n", cJSON_GetStringValue(IP), (int)cJSON_GetNumberValue(queryPort));
+            continue;
+        }
+        int numPlayers = cJSON_GetArraySize(jplayers);
+
+        if(numPlayers > 0) {
+            struct QueryPlayer* players = AllocPlayers(numPlayers);
+            if(!players){
+                printf("failed to allocate players structs for %s:%d\n", cJSON_GetStringValue(IP), (int)cJSON_GetNumberValue(queryPort));
+                continue;
+            }
+            for(int j = 0; j < numPlayers; j++){
+                cJSON* jplayer = cJSON_GetArrayItem(jplayers, j);
+                if(!jplayer) continue;
+                struct QueryPlayer* player = players + j;
+                utf8ToWideBuffer(cJSON_GetStringValue(cJSON_GetObjectItem(jplayer, "playername")), player->name, ARRAYSIZE(player->name));
+                player->score = (int)cJSON_GetNumberValue(cJSON_GetObjectItem(jplayer, "score"));
+                player->ping = (int)cJSON_GetNumberValue(cJSON_GetObjectItem(jplayer, "ping"));
+            }
+
+            svr->players = players;
+            svr->playersLength = numPlayers;
+        }
+    }
+cleanup:
+    if(root != 0)cJSON_Delete(root);
+}
+
+// needs query mutex lock
+void PopulateServerList()
+{
+    int i = 0;
+    for(struct QueryServer* svr = GetServerByIndex(0); svr != 0; svr = svr->next, i++){
         WCHAR players[32];
-        _snwprintf(players, 32, L"%d / %d", (int)cJSON_GetNumberValue(numplayers), (int)cJSON_GetNumberValue(maxplayers));
+        _snwprintf(players, 32, L"%d / %d", svr->playerCount, svr->maxPlayers);
+
+        WCHAR ping[8];
+        if(svr->ping != -1) _snwprintf(ping, 8, L"%d", svr->ping);
+        else wcscpy(ping, L"?");
 
         //printf("%-32s %3d / %-3d %s\n", cJSON_GetStringValue(hostname), (int)cJSON_GetNumberValue(numplayers), (int)cJSON_GetNumberValue(maxplayers), cJSON_GetStringValue(mapname));
 
@@ -377,29 +466,25 @@ void LoadServerList(char* json, DWORD length)
         li.mask = LVIF_TEXT;
         li.iItem = i; // row number
         li.iSubItem = 0; // server name column
-        li.pszText = utf8ToWide(cJSON_GetStringValue(hostname));
+        li.pszText = svr->hostname;
         ListView_InsertItem(serverlist, &li);
         li.iSubItem = 1; // players
         li.pszText = players;
         ListView_SetItem(serverlist, &li);
         li.iSubItem = 2; // ping
-        li.pszText = L"TODO";
+        li.pszText = ping;
         ListView_SetItem(serverlist, &li);
         li.iSubItem = 3; // map
-        li.pszText = utf8ToWide(cJSON_GetStringValue(mapname));
+        li.pszText = svr->mapname;
         ListView_SetItem(serverlist, &li);
         li.iSubItem = 4; // gamemode
-        li.pszText = utf8ToWide(cJSON_GetStringValue(gametype));
+        li.pszText = svr->gamemode;
         ListView_SetItem(serverlist, &li);
         li.iSubItem = 5; // mod
-        li.pszText = utf8ToWide(cJSON_GetStringValue(gameId));
+        li.pszText = svr->modname;
         ListView_SetItem(serverlist, &li);
 
     }
-    serverdata = root;
-    return;
-cleanup:
-    if(root != 0)cJSON_Delete(root);
 }
 
 void ReloadServers()
@@ -407,9 +492,16 @@ void ReloadServers()
     DWORD server_list_json_length;
     char* server_list_json = GetServerList(&server_list_json_length);
     if(server_list_json){
-        LoadServerList(server_list_json, server_list_json_length);
+        WaitForSingleObject(queryState->mutex, INFINITE);
+
+        LoadServerListFromJSON(server_list_json, server_list_json_length);
+
         free(server_list_json);
         server_list_json = 0;
+
+        PopulateServerList();
+
+        ReleaseMutex(queryState->mutex);
     }
     else {
         MessageBox(mainwindow, L"Failed to download server list", L"Error", MB_ICONERROR);
@@ -419,11 +511,50 @@ void ReloadServers()
 void PulseSecond()
 {
     printf("second\n");
+    WaitForSingleObject(queryState->mutex, INFINITE);
+
+    struct QueryServer* svr = GetSelectedServer();
+    if(svr){
+        if(svr->pendingQuery == 0){
+            svr->needInfo = true;
+        }
+    }
+
+    ReleaseMutex(queryState->mutex);
 }
 
 void PulseTimer()
 {
-    printf("pulse\n");
+    //printf("pulse\n");
+    int selectedServer = GetSelectedServerID();
+    WaitForSingleObject(queryState->mutex, INFINITE);
+
+    int i = 0;
+    for(struct QueryServer* svr = GetServerByIndex(0); svr != 0; svr = svr->next, i++){
+        if(svr->pingUpdated){
+            WCHAR ping[8];
+            _snwprintf(ping, 8, L"%d", svr->ping);
+            ListView_SetItemText(serverlist, i, 2, ping);
+            svr->pingUpdated = false;
+        }
+        if(svr->infoUpdated){
+            ListView_SetItemText(serverlist, i, 0, svr->hostname);
+            WCHAR players[32];
+            _snwprintf(players, 32, L"%d / %d", svr->playerCount, svr->maxPlayers);
+            ListView_SetItemText(serverlist, i, 1, players);
+            ListView_SetItemText(serverlist, i, 3, svr->mapname);
+            ListView_SetItemText(serverlist, i, 4, svr->gamemode);
+            ListView_SetItemText(serverlist, i, 5, svr->modname);
+
+            if(i == selectedServer){
+                WCHAR serverinfo[64];
+                _snwprintf(serverinfo, 64, L"Axis: %d Allies: %d Timer: %d:%02d", svr->tickets[0], svr->tickets[1], svr->roundTimeRemaining / 60, svr->roundTimeRemaining % 60);
+                SetWindowText(serverinfolabel, serverinfo);
+            }
+        }
+    }
+
+    ReleaseMutex(queryState->mutex);
 }
 
 int __stdcall WinMain(HINSTANCE instance, HINSTANCE previnstance, LPSTR commandline, int cmdshow)
@@ -470,6 +601,7 @@ int __stdcall WinMain(HINSTANCE instance, HINSTANCE previnstance, LPSTR commandl
     CreateWindow(L"BUTTON", L"Refresh", WS_TABSTOP | WS_VISIBLE | WS_CHILD | BS_DEFPUSHBUTTON, 680, csizey - 40, 100, 30, mainwindow, (HMENU)ID_REFRESHBTN, instance, 0);
 
     addresslabel = CreateWindow(WC_STATIC, L"Select a server", WS_CHILD | WS_VISIBLE, 10, csizey-35, 170, 16, mainwindow, (HMENU)ID_ADDRESSLABEL, instance, 0);
+    serverinfolabel = CreateWindow(WC_STATIC, L"", WS_CHILD | WS_VISIBLE, 180, csizey-35, 300, 16, mainwindow, (HMENU)ID_SERVERINFOLABEL, instance, 0);
     
     // SendMessage(button, WM_SETFONT, (WPARAM)hFont, MAKELPARAM(TRUE, 0));
     // SendMessage(bittom, WM_SETFONT, (WPARAM)hFont, MAKELPARAM(TRUE, 0));
@@ -523,6 +655,7 @@ int __stdcall WinMain(HINSTANCE instance, HINSTANCE previnstance, LPSTR commandl
 
     ShowWindow(mainwindow, cmdshow);
 
+    queryState = QueryInit();
     //ReloadServers();
 
     //CreateThread(0, 0, QueryThreadMain, 0, 0, 0);
