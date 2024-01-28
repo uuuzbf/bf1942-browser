@@ -221,6 +221,14 @@ void __stdcall ListViewNotify(NMHDR* notify)
 LRESULT __stdcall WndProcMain(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 {
     switch(msg){
+        // case WM_ERASEBKGND:{
+        //     HDC dc = (HDC)wParam;
+        //     HBRUSH backgroundColor = GetStockObject(COLOR_BTNFACE + 1);
+        //     RECT rect;
+        //     GetClientRect(hwnd, &rect);
+        //     FillRect(dc, &rect, backgroundColor);
+        //     return 1;
+        // }
         case WM_COMMAND:
             printf("WM_COMMAND: %d\n", wParam);
             if(wParam == IDCLOSE){
@@ -432,25 +440,40 @@ int __stdcall WinMain(HINSTANCE instance, HINSTANCE previnstance, LPSTR commandl
     wndclass.cbSize = sizeof(wndclass);
     wndclass.lpszClassName = L"BrowserMainClass";
     wndclass.lpfnWndProc = WndProcMain;
-    wndclass.hbrBackground = GetSysColorBrush(COLOR_WINDOW);
+    wndclass.hbrBackground = (HBRUSH)(COLOR_WINDOW + 1);//CreateSolidBrush(RGB(0xf0, 0xf0, 0xf0)); GetSysColorBrush(COLOR_WINDOW);
     wndclass.hInstance = instance;
+
+	//wndclass.hIcon = LoadIcon(NULL, IDI_APPLICATION);
+	//wndclass.hCursor = LoadCursor(NULL, IDC_ARROW);
+    //wndclass.hIconSm = LoadIcon(NULL, IDI_APPLICATION);
     if(!RegisterClassEx(&wndclass)){
         MessageBox(0, L"RegisterClassEx failed", L":(", MB_ICONERROR);
         return 1;
     }
 
-    //HWND mainwindow = CreateWindowEx(0, L"BrowserMainClass", L"title.", 0, 200, 200, 600, 600, 0, 0, instance, 0);
-    mainwindow = CreateWindow(L"BrowserMainClass", L"BF1942 Server List", WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT, 960, 600, 0, 0, instance, 0);
+    mainwindow = CreateWindowEx(WS_EX_OVERLAPPEDWINDOW, L"BrowserMainClass", L"BF1942 Server List", WS_OVERLAPPEDWINDOW ^ WS_THICKFRAME, CW_USEDEFAULT, CW_USEDEFAULT, 960, 600, 0, 0, instance, 0);
     if(mainwindow == 0){
         MessageBox(0, L"CreateWindowEx failed", L":(", MB_ICONERROR);
         return 1;
     }
+    // NONCLIENTMETRICS ncm;
+    // ncm.cbSize = sizeof(NONCLIENTMETRICS);
+    // SystemParametersInfo(SPI_GETNONCLIENTMETRICS, sizeof(NONCLIENTMETRICS), &ncm, 0);
+    // HFONT hFont = CreateFontIndirect(&ncm.lfMessageFont);
+    // SendMessage(mainwindow, WM_SETFONT, (WPARAM)hFont, MAKELPARAM(TRUE, 0));
+
     RECT clientarea;
     GetClientRect(mainwindow, &clientarea);
     int csizex = clientarea.right-clientarea.left, csizey = clientarea.bottom-clientarea.top;
 
     CreateWindow(L"BUTTON", L"Close", WS_TABSTOP | WS_VISIBLE | WS_CHILD | BS_DEFPUSHBUTTON, csizex - 110, csizey - 40, 100, 30, mainwindow, (HMENU)IDCLOSE, instance, 0);
     CreateWindow(L"BUTTON", L"Refresh", WS_TABSTOP | WS_VISIBLE | WS_CHILD | BS_DEFPUSHBUTTON, 680, csizey - 40, 100, 30, mainwindow, (HMENU)ID_REFRESHBTN, instance, 0);
+
+    addresslabel = CreateWindow(WC_STATIC, L"Select a server", WS_CHILD | WS_VISIBLE, 10, csizey-35, 170, 16, mainwindow, (HMENU)ID_ADDRESSLABEL, instance, 0);
+    
+    // SendMessage(button, WM_SETFONT, (WPARAM)hFont, MAKELPARAM(TRUE, 0));
+    // SendMessage(bittom, WM_SETFONT, (WPARAM)hFont, MAKELPARAM(TRUE, 0));
+    // SendMessage(addresslabel, WM_SETFONT, (WPARAM)hFont, MAKELPARAM(TRUE, 0));
 
     // LVS_LIST means we get a details view with columns
     serverlist = CreateWindow(WC_LISTVIEW,  L"", WS_CHILD | WS_VISIBLE | WS_BORDER | LVS_REPORT | LVS_SINGLESEL, 10, 10, 660, csizey-50, mainwindow, (HMENU)ID_SERVERLIST, instance, 0);
@@ -498,11 +521,9 @@ int __stdcall WinMain(HINSTANCE instance, HINSTANCE previnstance, LPSTR commandl
     col.cx = 40;
     ListView_InsertColumn(playerlist, col.iSubItem, &col);
 
-    addresslabel = CreateWindow(WC_STATIC, L"Select a server", WS_CHILD | WS_VISIBLE, 10, csizey-35, 170, 16, mainwindow, (HMENU)ID_ADDRESSLABEL, instance, 0);
-
     ShowWindow(mainwindow, cmdshow);
 
-    ReloadServers();
+    //ReloadServers();
 
     //CreateThread(0, 0, QueryThreadMain, 0, 0, 0);
     MSG msg;
