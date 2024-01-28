@@ -665,7 +665,7 @@ int __stdcall WinMain(HINSTANCE instance, HINSTANCE previnstance, LPSTR commandl
     ShowWindow(mainwindow, cmdshow);
 
     queryState = QueryInit();
-    //ReloadServers();
+    ReloadServers();
 
     //CreateThread(0, 0, QueryThreadMain, 0, 0, 0);
     MSG msg;
