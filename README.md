@@ -12,6 +12,5 @@ A server browser for Battlefield 1942. My WIN32 GUI hello world project. It uses
 Run build.bat in a x86 VS command prompt. x64 not tested.
 
 ## TODO
-- Fix BF1942.exe path saving?
 - Update selected server's playerlist
 - Make the GUI look like its atleast 2005, not 1993

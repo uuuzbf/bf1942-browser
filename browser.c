@@ -82,7 +82,7 @@ void initBF1942Path()
     of.nMaxFile = sizeof(bf1942_path);
     of.lpstrTitle = L"Select BF1942.exe in your game folder";
     of.lpstrFilter = L"BF1942.exe\0BF1942.exe\0";
-    of.Flags = OFN_PATHMUSTEXIST | OFN_FILEMUSTEXIST;
+    of.Flags = OFN_PATHMUSTEXIST | OFN_FILEMUSTEXIST | OFN_NOCHANGEDIR;
     if(GetOpenFileName(&of)){
         // store path
         h = fopen("bf1942_path.txt", "w");
