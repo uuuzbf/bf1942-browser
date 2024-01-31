@@ -503,12 +503,17 @@ void ReloadServers()
     if(server_list_json){
         WaitForSingleObject(queryState->mutex, INFINITE);
 
+        // prevent flickering while the list is updated
+        SendMessage(serverlist, WM_SETREDRAW, false, 0);
+
         LoadServerListFromJSON(server_list_json, server_list_json_length);
 
         free(server_list_json);
         server_list_json = 0;
 
         PopulateServerList();
+
+        SendMessage(serverlist, WM_SETREDRAW, true, 0);
 
         ReleaseMutex(queryState->mutex);
     }
@@ -539,6 +544,8 @@ void PulseTimer()
     WaitForSingleObject(queryState->mutex, INFINITE);
 
     int i = 0;
+    // prevent flickering while the list is updated
+    SendMessage(serverlist, WM_SETREDRAW, false, 0);
     for(struct QueryServer* svr = GetServerByIndex(0); svr != 0; svr = svr->next, i++){
         if(svr->pingUpdated){
             WCHAR ping[8];
@@ -562,6 +569,8 @@ void PulseTimer()
             }
         }
     }
+    
+    SendMessage(serverlist, WM_SETREDRAW, true, 0);
 
     ReleaseMutex(queryState->mutex);
 }
@@ -618,7 +627,7 @@ int __stdcall WinMain(HINSTANCE instance, HINSTANCE previnstance, LPSTR commandl
 
     // LVS_LIST means we get a details view with columns
     serverlist = CreateWindow(WC_LISTVIEW,  L"", WS_CHILD | WS_VISIBLE | WS_BORDER | LVS_REPORT | LVS_SINGLESEL, 10, 10, 660, csizey-50, mainwindow, (HMENU)ID_SERVERLIST, instance, 0);
-    ListView_SetExtendedListViewStyle(serverlist, LVS_EX_FULLROWSELECT | LVS_EX_GRIDLINES | LVS_EX_HEADERDRAGDROP);
+    ListView_SetExtendedListViewStyle(serverlist, LVS_EX_FULLROWSELECT | LVS_EX_GRIDLINES | LVS_EX_HEADERDRAGDROP | LVS_EX_DOUBLEBUFFER);
     LVCOLUMN col;
     col.mask = LVCF_FMT | LVCF_WIDTH | LVCF_TEXT;
     col.fmt = LVCFMT_LEFT;
