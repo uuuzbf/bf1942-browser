@@ -629,7 +629,7 @@ int __stdcall WinMain(HINSTANCE instance, HINSTANCE previnstance, LPSTR commandl
     // SendMessage(addresslabel, WM_SETFONT, (WPARAM)hFont, MAKELPARAM(TRUE, 0));
 
     // LVS_LIST means we get a details view with columns
-    serverlist = CreateWindow(WC_LISTVIEW,  L"", WS_CHILD | WS_VISIBLE | WS_BORDER | LVS_REPORT | LVS_SINGLESEL, 10, 10, 660, csizey-50, mainwindow, (HMENU)ID_SERVERLIST, instance, 0);
+    serverlist = CreateWindow(WC_LISTVIEW,  L"", WS_CHILD | WS_VISIBLE | WS_BORDER | LVS_REPORT | LVS_SINGLESEL | LVS_SHOWSELALWAYS, 10, 10, 660, csizey-50, mainwindow, (HMENU)ID_SERVERLIST, instance, 0);
     ListView_SetExtendedListViewStyle(serverlist, LVS_EX_FULLROWSELECT | LVS_EX_GRIDLINES | LVS_EX_HEADERDRAGDROP | LVS_EX_DOUBLEBUFFER);
     LVCOLUMN col;
     col.mask = LVCF_FMT | LVCF_WIDTH | LVCF_TEXT;
