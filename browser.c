@@ -151,8 +151,8 @@ void SelectServer(int index){
         for(int i = 0; i < svr->playersLength; i++){
             struct QueryPlayer* player = svr->players + i;
 
-            WCHAR scorestr[16], pingstr[16];
-            _snwprintf(scorestr, 16, L"%d", player->score);
+            WCHAR scorestr[32], pingstr[16];
+            _snwprintf(scorestr, 32, L"%d/%d/%d", player->score, player->kills, player->deaths);
             _snwprintf(pingstr, 16, L"%d", player->ping);
 
             LV_ITEM li = {0};
@@ -446,6 +446,9 @@ void LoadServerListFromJSON(char* json, DWORD length)
                 struct QueryPlayer* player = players + j;
                 utf8ToWideBuffer(cJSON_GetStringValue(cJSON_GetObjectItem(jplayer, "playername")), player->name, ARRAYSIZE(player->name));
                 player->score = (int)cJSON_GetNumberValue(cJSON_GetObjectItem(jplayer, "score"));
+                player->kills = (int)cJSON_GetNumberValue(cJSON_GetObjectItem(jplayer, "kills"));
+                player->deaths = (int)cJSON_GetNumberValue(cJSON_GetObjectItem(jplayer, "deaths"));
+                player->team = (int)cJSON_GetNumberValue(cJSON_GetObjectItem(jplayer, "team"));
                 player->ping = (int)cJSON_GetNumberValue(cJSON_GetObjectItem(jplayer, "ping"));
             }
 
@@ -660,15 +663,15 @@ int __stdcall WinMain(HINSTANCE instance, HINSTANCE previnstance, LPSTR commandl
     ListView_SetExtendedListViewStyle(playerlist, LVS_EX_FULLROWSELECT | LVS_EX_GRIDLINES | LVS_EX_HEADERDRAGDROP);
     col.iSubItem = 0;
     col.pszText = L"Player name";
-    col.cx = 170;
+    col.cx = 140;
     ListView_InsertColumn(playerlist, col.iSubItem, &col);
     col.iSubItem = 1;
-    col.pszText = L"Score";
-    col.cx = 40;
+    col.pszText = L"S/K/D";
+    col.cx = 58;
     ListView_InsertColumn(playerlist, col.iSubItem, &col);
     col.iSubItem = 2;
     col.pszText = L"Ping";
-    col.cx = 40;
+    col.cx = 30;
     ListView_InsertColumn(playerlist, col.iSubItem, &col);
 
     ShowWindow(mainwindow, cmdshow);

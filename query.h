@@ -4,8 +4,7 @@
 
 struct QueryPlayer {
     WCHAR name[32];
-    int score;
-    int ping;
+    int score, kills, deaths, ping, team;
 };
 
 struct QueryServer {
