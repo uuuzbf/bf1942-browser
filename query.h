@@ -4,7 +4,8 @@
 
 struct QueryPlayer {
     WCHAR name[32];
-    int score, kills, deaths, ping, team;
+    short score, kills, deaths, ping;
+    char team;
 };
 
 struct QueryServer {
@@ -13,7 +14,7 @@ struct QueryServer {
     WCHAR mapname[32];
     WCHAR gamemode[16];
     WCHAR modname[16];
-    int hostPort;
+    unsigned short hostPort;
     int playerCount;
     int maxPlayers;
     int ping;

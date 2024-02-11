@@ -486,11 +486,11 @@ void LoadServerListFromJSON(char* json, DWORD length)
                 if(!jplayer) continue;
                 struct QueryPlayer* player = players + j;
                 utf8ToWideBuffer(cJSON_GetStringValue(cJSON_GetObjectItem(jplayer, "playername")), player->name, ARRAYSIZE(player->name));
-                player->score = (int)cJSON_GetNumberValue(cJSON_GetObjectItem(jplayer, "score"));
-                player->kills = (int)cJSON_GetNumberValue(cJSON_GetObjectItem(jplayer, "kills"));
-                player->deaths = (int)cJSON_GetNumberValue(cJSON_GetObjectItem(jplayer, "deaths"));
-                player->team = (int)cJSON_GetNumberValue(cJSON_GetObjectItem(jplayer, "team"));
-                player->ping = (int)cJSON_GetNumberValue(cJSON_GetObjectItem(jplayer, "ping"));
+                player->score = (short)cJSON_GetNumberValue(cJSON_GetObjectItem(jplayer, "score"));
+                player->kills = (short)cJSON_GetNumberValue(cJSON_GetObjectItem(jplayer, "kills"));
+                player->deaths = (short)cJSON_GetNumberValue(cJSON_GetObjectItem(jplayer, "deaths"));
+                player->team = (char)cJSON_GetNumberValue(cJSON_GetObjectItem(jplayer, "team"));
+                player->ping = (short)cJSON_GetNumberValue(cJSON_GetObjectItem(jplayer, "ping"));
             }
 
             SortPlayers(players, numPlayers);
