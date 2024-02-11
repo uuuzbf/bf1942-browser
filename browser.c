@@ -183,7 +183,7 @@ void SelectServer(int index)
 
     // if there are no players on the server this array will be missing
     if(svr->players != 0){
-        for(int i = 0; i < svr->playersLength; i++){
+        for(unsigned i = 0; i < svr->playersLength; i++){
             struct QueryPlayer* player = svr->players + i;
 
             WCHAR scorestr[32], pingstr[16];
@@ -320,9 +320,11 @@ LRESULT __stdcall WndProcMain(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             }
             break;
         case WM_NOTIFY:{
-            if(wParam == 100){
-                ListViewNotify((NMHDR*)lParam);
+            NMHDR* notify = (NMHDR*)lParam;
+            switch(wParam){
+                case ID_SERVERLIST: ListViewNotify(notify); break;
             }
+
             break;
         }
         case WM_TIMER:
@@ -469,7 +471,7 @@ void LoadServerListFromJSON(char* json, DWORD length)
             printf("%s:%d has no playerlist\n", cJSON_GetStringValue(IP), (int)cJSON_GetNumberValue(queryPort));
             continue;
         }
-        int numPlayers = cJSON_GetArraySize(jplayers);
+        unsigned int numPlayers = cJSON_GetArraySize(jplayers);
 
         if(numPlayers > 0) {
             struct QueryPlayer* players = AllocPlayers(numPlayers);
@@ -477,7 +479,7 @@ void LoadServerListFromJSON(char* json, DWORD length)
                 printf("failed to allocate players structs for %s:%d\n", cJSON_GetStringValue(IP), (int)cJSON_GetNumberValue(queryPort));
                 continue;
             }
-            for(int j = 0; j < numPlayers; j++){
+            for(unsigned int j = 0; j < numPlayers; j++){
                 cJSON* jplayer = cJSON_GetArrayItem(jplayers, j);
                 if(!jplayer) continue;
                 struct QueryPlayer* player = players + j;

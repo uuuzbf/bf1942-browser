@@ -43,7 +43,7 @@ struct QueryState {
 
 void utf8ToWideBuffer(const char* str, WCHAR* outbuff, int outbufflen);
 
-struct QueryPlayer* AllocPlayers(int count);
+struct QueryPlayer* AllocPlayers(unsigned int count);
 struct QueryServer* AddServer(const char* ip, unsigned short queryport);
 struct QueryServer* GetServerByIndex(int n);
 void RemoveAllServers();

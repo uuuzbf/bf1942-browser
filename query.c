@@ -70,7 +70,7 @@ char* GSParseNextKV(char** source, char** value, unsigned int* index)
     return key;
 }
 
-struct QueryPlayer* AllocPlayers(int count)
+struct QueryPlayer* AllocPlayers(unsigned int count)
 {
     if(count < 1 || count > 256) return 0;
     return calloc(count, sizeof(struct QueryPlayer));
@@ -127,7 +127,46 @@ void SendServerQuery(struct QueryServer* svr, int type)
     svr->pendingQuery = type;
 }
 
-void HandleServerResponse(struct QueryServer* svr, char* data, int length)
+void HandleInfoResponse(struct QueryServer* svr, char* data, size_t length)
+{
+    bool final = false;
+    
+    for(;;){
+        char* value;
+        unsigned int index;
+        char* key = GSParseNextKV(&data, &value, &index);
+        if(key == 0) {
+            printf("query parse error\n");
+            // parse error
+            break;
+        }
+        if(data == 0){
+            printf("query end of data\n");
+            // end of data
+            break;
+        }
+        if(!strcmp(key, "hostname")) utf8ToWideBuffer(value, svr->hostname, ARRAYSIZE(svr->hostname));
+        else if(!strcmp(key, "gameId")) utf8ToWideBuffer(value, svr->modname, ARRAYSIZE(svr->modname));
+        else if(!strcmp(key, "gametype")) utf8ToWideBuffer(value, svr->gamemode, ARRAYSIZE(svr->gamemode));
+        else if(!strcmp(key, "mapname")) utf8ToWideBuffer(value, svr->mapname, ARRAYSIZE(svr->mapname));
+        else if(!strcmp(key, "maxplayers")) svr->maxPlayers = strtol(value, 0, 10);
+        else if(!strcmp(key, "numplayers")) svr->playerCount = strtol(value, 0, 10);
+        else if(!strcmp(key, "roundTimeRemain")) svr->roundTimeRemaining = strtol(value, 0, 10);
+        else if(!strcmp(key, "tickets1")) svr->tickets[0] = strtol(value, 0, 10);
+        else if(!strcmp(key, "tickets2")) svr->tickets[1] = strtol(value, 0, 10);
+        else if(!strcmp(key, "password")) svr->passworded = strtol(value, 0, 10) != 0;
+        else if(!strcmp(key, "sv_punkbuster")) svr->punkbuster = strtol(value, 0, 10) != 0;
+        else if(!strcmp(key, "final")) final = true;
+        else continue;
+        printf(" parsed %s[%i] = %s\n", key, index, value);
+    }
+    if(final){        
+        svr->pendingQuery = QUERY_NONE;
+        svr->infoUpdated = true;
+    }
+}
+
+void HandleServerResponse(struct QueryServer* svr, char* data, size_t length)
 {
     if(svr->pingSendTime != 0){
         svr->ping = ticks() - svr->pingSendTime;
@@ -138,38 +177,7 @@ void HandleServerResponse(struct QueryServer* svr, char* data, int length)
     printf("response from %s:%d - %d\n", inet_ntoa(svr->queryAddress.sin_addr), ntohs(svr->queryAddress.sin_port), svr->pendingQuery);
 
     if(svr->pendingQuery == QUERY_INFO){
-        for(;;){
-            char* value;
-            unsigned int index;
-            char* key = GSParseNextKV(&data, &value, &index);
-            if(key == 0) {
-                printf("query parse error\n");
-                // parse error
-                break;
-            }
-            if(data == 0){
-                printf("query end of data\n");
-                // end of data
-                break;
-            }
-            if(!strcmp(key, "hostname")) utf8ToWideBuffer(value, svr->hostname, ARRAYSIZE(svr->hostname));
-            else if(!strcmp(key, "gameId")) utf8ToWideBuffer(value, svr->modname, ARRAYSIZE(svr->modname));
-            else if(!strcmp(key, "gametype")) utf8ToWideBuffer(value, svr->gamemode, ARRAYSIZE(svr->gamemode));
-            else if(!strcmp(key, "mapname")) utf8ToWideBuffer(value, svr->mapname, ARRAYSIZE(svr->mapname));
-            else if(!strcmp(key, "maxplayers")) svr->maxPlayers = strtol(value, 0, 10);
-            else if(!strcmp(key, "numplayers")) svr->playerCount = strtol(value, 0, 10);
-            else if(!strcmp(key, "roundTimeRemain")) svr->roundTimeRemaining = strtol(value, 0, 10);
-            else if(!strcmp(key, "tickets1")) svr->tickets[0] = strtol(value, 0, 10);
-            else if(!strcmp(key, "tickets2")) svr->tickets[1] = strtol(value, 0, 10);
-            else if(!strcmp(key, "password")) svr->passworded = strtol(value, 0, 10) != 0;
-            else if(!strcmp(key, "sv_punkbuster")) svr->punkbuster = strtol(value, 0, 10) != 0;
-            else if(!strcmp(key, "final")){
-                svr->pendingQuery = QUERY_NONE;
-                svr->infoUpdated = true;
-            }
-            else continue;
-            printf(" parsed %s[%i] = %s\n", key, index, value);
-        }
+        HandleInfoResponse(svr, data, length);
     }
 }
 
