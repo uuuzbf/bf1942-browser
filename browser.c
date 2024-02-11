@@ -8,6 +8,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <winhttp.h>
+#include <Mmsystem.h>
 
 #include "cjson/cJSON.h"
 #include "query.h"
@@ -128,7 +129,41 @@ struct QueryServer* GetSelectedServer()
     return svr;
 }
 
-void SelectServer(int index){
+void CopySelectedServerAddress()
+{
+    struct QueryServer* svr = GetSelectedServer();
+    if(!svr) return;
+
+    WaitForSingleObject(queryState->mutex, INFINITE);
+    WCHAR address[32];
+    int length = _snwprintf(address, 32, L"%hs:%d", inet_ntoa(svr->queryAddress.sin_addr), svr->hostPort); // %hs is MSVC specific
+    ReleaseMutex(queryState->mutex);
+
+    if(length <= 0) return;
+
+    if(!OpenClipboard(mainwindow)){
+        printf("OpenClipboard failed %d\n", GetLastError());
+        return;
+    }
+
+    EmptyClipboard();
+
+    size_t bytes = (length + 1) * sizeof(WCHAR);
+    HGLOBAL buffer = GlobalAlloc(GMEM_MOVEABLE, bytes);
+
+    void* p = GlobalLock(buffer);
+    memcpy(p, address, bytes);
+    GlobalUnlock(buffer);
+
+    SetClipboardData(CF_UNICODETEXT, buffer);
+
+    CloseClipboard();
+
+    PlaySound(L"MouseClick", NULL, SND_SYNC); 
+}
+
+void SelectServer(int index)
+{
     printf("selecting server %d\n", index);
     ListView_DeleteAllItems(playerlist);
 
@@ -263,6 +298,8 @@ LRESULT __stdcall WndProcMain(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
                 DestroyWindow(hwnd);
             } else if(wParam == ID_REFRESHBTN){
                 ReloadServers();
+            } else if(wParam == ID_ADDRESSLABEL){
+                CopySelectedServerAddress();
             }
             break;
         //case WM_SETFOCUS:
@@ -621,7 +658,7 @@ int __stdcall WinMain(HINSTANCE instance, HINSTANCE previnstance, LPSTR commandl
     CreateWindow(L"BUTTON", L"Close", WS_TABSTOP | WS_VISIBLE | WS_CHILD | BS_DEFPUSHBUTTON, csizex - 110, csizey - 40, 100, 30, mainwindow, (HMENU)IDCLOSE, instance, 0);
     CreateWindow(L"BUTTON", L"Refresh", WS_TABSTOP | WS_VISIBLE | WS_CHILD | BS_DEFPUSHBUTTON, 680, csizey - 40, 100, 30, mainwindow, (HMENU)ID_REFRESHBTN, instance, 0);
 
-    addresslabel = CreateWindow(WC_STATIC, L"Select a server", WS_CHILD | WS_VISIBLE, 10, csizey-35, 170, 16, mainwindow, (HMENU)ID_ADDRESSLABEL, instance, 0);
+    addresslabel = CreateWindow(WC_STATIC, L"Select a server", WS_CHILD | WS_VISIBLE | SS_NOTIFY, 10, csizey-35, 170, 16, mainwindow, (HMENU)ID_ADDRESSLABEL, instance, 0);
     serverinfolabel = CreateWindow(WC_STATIC, L"", WS_CHILD | WS_VISIBLE, 180, csizey-35, 300, 16, mainwindow, (HMENU)ID_SERVERINFOLABEL, instance, 0);
     
     // SendMessage(button, WM_SETFONT, (WPARAM)hFont, MAKELPARAM(TRUE, 0));
