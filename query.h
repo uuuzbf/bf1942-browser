@@ -23,12 +23,13 @@ struct QueryServer {
     bool passworded;
     struct sockaddr_in queryAddress;
     unsigned int pingSendTime;
-    int pendingQuery;
+    unsigned int pendingQuery;
     bool pingUpdated;
     bool infoUpdated;
     bool playersUpdated;
     bool needInfo;
     bool needPlayers;
+    bool needPing;
     struct QueryPlayer* players;
     int playersLength; // length of players array, not necessarily the same as playerCount
 };

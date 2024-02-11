@@ -6,13 +6,15 @@
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdint.h>
 #include <WinSock2.h>
 #include "query.h"
 
 enum {
     QUERY_NONE = 0,
     QUERY_INFO,
-    QUERY_PLAYERS
+    QUERY_PLAYERS,
+    QUERY_SERVER_INFO,
 };
 
 struct QueryState params;
@@ -136,11 +138,32 @@ void SendServerQuery(struct QueryServer* svr, int type)
     switch(type){
         case QUERY_INFO: buf = "\\info\\", len = 6; svr->needInfo = false; break;
         case QUERY_PLAYERS: buf = "\\players\\", len = 9; svr->needPlayers = false; break;
+        case QUERY_SERVER_INFO:{
+            // For measuring ping to the server.
+            // This is not a regular query port packet, but a part of the game protocol, and sent to the game port.
+            // This is used by the client when the server is changing maps and restarting, this packet is used to detect
+            // when the server is up before the client restarts for the mapchange.
+            // It is better to use this to measure pings, because the query packets are processed in the server's main thread,
+            // so they may sit in the receive buffer for up to 16 milliseconds due to the server's tickrate.
+            // The game protocol is processed on its own thread which is always receiving new packets so a SERVER_INFO_REQUEST
+            // is answered instantly.
+
+            // make sure we know the game port
+            if(svr->hostPort == 0) return;
+            buf = "\x00\x00\x90\x00\x00\x00\x00";
+            len = 8;
+            struct sockaddr_in addr = svr->queryAddress;
+            addr.sin_port = htons(svr->hostPort);
+            sendto(params.querysocket, buf, len, 0, (struct sockaddr*)&addr, sizeof(addr));
+            svr->pingSendTime = ticks();
+            printf("SERVER_INFO_REQUEST to %s:%d\n", inet_ntoa(addr.sin_addr), ntohs(addr.sin_port));
+            svr->needPing = false;
+            return;
+        }
         default: return;
     }
     printf("%s (%d) to %s:%d\n", buf, type, inet_ntoa(svr->queryAddress.sin_addr), ntohs(svr->queryAddress.sin_port));
     sendto(params.querysocket, buf, len, 0, (struct sockaddr*)&svr->queryAddress, sizeof(svr->queryAddress));
-    if(type == QUERY_INFO)svr->pingSendTime = ticks();
     svr->pendingQuery = type;
 }
 
@@ -185,12 +208,6 @@ void HandleInfoResponse(struct QueryServer* svr, char* data, size_t length)
 
 void HandleServerResponse(struct QueryServer* svr, char* data, size_t length)
 {
-    if(svr->pingSendTime != 0){
-        svr->ping = ticks() - svr->pingSendTime;
-        svr->pingSendTime = 0;
-        svr->pingUpdated = true;
-    }
-
     printf("response from %s:%d - %d\n", inet_ntoa(svr->queryAddress.sin_addr), ntohs(svr->queryAddress.sin_port), svr->pendingQuery);
 
     if(svr->pendingQuery == QUERY_INFO){
@@ -202,6 +219,15 @@ struct QueryServer* GetServerByQueryAddress(struct sockaddr_in* addr)
 {
     for(struct QueryServer* svr = params.server; svr != 0; svr = svr->next){
         if(svr->queryAddress.sin_addr.S_un.S_addr == addr->sin_addr.S_un.S_addr && svr->queryAddress.sin_port == addr->sin_port) return svr;
+    }
+    return 0;
+}
+
+struct QueryServer* GetServerByGameAddress(struct sockaddr_in* addr)
+{
+    uint16_t port = ntohs(addr->sin_port);
+    for(struct QueryServer* svr = params.server; svr != 0; svr = svr->next){
+        if(svr->queryAddress.sin_addr.S_un.S_addr == addr->sin_addr.S_un.S_addr && svr->hostPort == port) return svr;
     }
     return 0;
 }
@@ -239,6 +265,20 @@ DWORD __stdcall QueryThreadMain(void* arg)
                 res = recvfrom(params.querysocket, buffer, 1500, 0, (struct sockaddr*)&remote, &recvlen);
                 printf("data from %s:%d length %d\n", inet_ntoa(remote.sin_addr), ntohs(remote.sin_port), res);
                 if(res < 0) break;
+
+                // is it a SERVER_INFO_RESPONSE from a game port? see QUERY_SERVER_INFO in SendServerQuery
+                // length is atleast 7, first byte is 1, third byte's top 4 bits is 0xA
+                if(res >= 7 && ((*(uint32_t*)&buffer[0]) & 0x00F000FF) == 0x00A00001){
+                    struct QueryServer* svr = GetServerByGameAddress(&remote);
+                    if(svr && svr->pingSendTime != 0) {
+                        svr->ping = ticks() - svr->pingSendTime;
+                        svr->pingSendTime = 0;
+                        svr->pingUpdated = true;
+                        printf("SERVER_INFO_RESPONSE %dms\n", svr->ping);
+                    }
+                    continue;
+                }
+
                 struct QueryServer* svr = GetServerByQueryAddress(&remote);
                 if(!svr) continue;
                 HandleServerResponse(svr, buffer, res);
@@ -254,7 +294,8 @@ DWORD __stdcall QueryThreadMain(void* arg)
                     SendServerQuery(svr, QUERY_INFO);
                 } else if(svr->needPlayers){
                     SendServerQuery(svr, QUERY_PLAYERS);
-                    svr->needPlayers = false;
+                } else if(svr->needPing){
+                    SendServerQuery(svr, QUERY_SERVER_INFO);
                 }
                 else continue;
                 if(--sends == 0)break;

@@ -180,6 +180,7 @@ void SelectServer(int index)
 
     // query info when server selected
     svr->needInfo = true;
+    svr->needPing = true;
 
     // if there are no players on the server this array will be missing
     if(svr->players != 0){
@@ -450,7 +451,7 @@ void LoadServerListFromJSON(char* json, DWORD length)
             printf("AddServer failed for %s:%d\n", cJSON_GetStringValue(IP), (int)cJSON_GetNumberValue(queryPort));
             continue;
         }
-        svr->hostPort = (int)cJSON_GetNumberValue(hostport);
+        svr->hostPort = (unsigned short)cJSON_GetNumberValue(hostport);
         svr->maxPlayers = (int)cJSON_GetNumberValue(cJSON_GetObjectItem(query, "maxplayers"));
         svr->playerCount = (int)cJSON_GetNumberValue(cJSON_GetObjectItem(query, "numplayers"));
         utf8ToWideBuffer(cJSON_GetStringValue(cJSON_GetObjectItem(query, "hostname")), svr->hostname, ARRAYSIZE(svr->hostname));
@@ -465,6 +466,7 @@ void LoadServerListFromJSON(char* json, DWORD length)
 
         // request info query from server
         svr->needInfo = true;
+        svr->needPing = true;
 
         cJSON* jplayers = cJSON_GetObjectItem(query, "players");
         if(!jplayers){
@@ -574,6 +576,11 @@ void PulseSecond()
     if(svr){
         if(svr->pendingQuery == 0){
             svr->needInfo = true;
+            svr->needPing = true;
+        }
+        else {
+            // probably a timeout occured, reset pending query so next time new requests are sent
+            svr->pendingQuery = 0;
         }
     }
 
