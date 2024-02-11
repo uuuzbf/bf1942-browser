@@ -639,7 +639,7 @@ int __stdcall WinMain(HINSTANCE instance, HINSTANCE previnstance, LPSTR commandl
     wndclass.cbSize = sizeof(wndclass);
     wndclass.lpszClassName = L"BrowserMainClass";
     wndclass.lpfnWndProc = WndProcMain;
-    wndclass.hbrBackground = (HBRUSH)(COLOR_WINDOW + 1);//CreateSolidBrush(RGB(0xf0, 0xf0, 0xf0)); GetSysColorBrush(COLOR_WINDOW);
+    wndclass.hbrBackground = /*(HBRUSH)(COLOR_WINDOW + 1);*/ CreateSolidBrush(RGB(0xf0, 0xf0, 0xf0)); /*GetSysColorBrush(COLOR_WINDOW);*/
     wndclass.hInstance = instance;
 
 	//wndclass.hIcon = LoadIcon(NULL, IDI_APPLICATION);
@@ -655,25 +655,24 @@ int __stdcall WinMain(HINSTANCE instance, HINSTANCE previnstance, LPSTR commandl
         MessageBox(0, L"CreateWindowEx failed", L":(", MB_ICONERROR);
         return 1;
     }
-    // NONCLIENTMETRICS ncm;
-    // ncm.cbSize = sizeof(NONCLIENTMETRICS);
-    // SystemParametersInfo(SPI_GETNONCLIENTMETRICS, sizeof(NONCLIENTMETRICS), &ncm, 0);
-    // HFONT hFont = CreateFontIndirect(&ncm.lfMessageFont);
-    // SendMessage(mainwindow, WM_SETFONT, (WPARAM)hFont, MAKELPARAM(TRUE, 0));
+    NONCLIENTMETRICS ncm;
+    ncm.cbSize = sizeof(NONCLIENTMETRICS);
+    SystemParametersInfo(SPI_GETNONCLIENTMETRICS, sizeof(NONCLIENTMETRICS), &ncm, 0);
+    HFONT hFont = CreateFontIndirect(&ncm.lfMessageFont);
+    SendMessage(mainwindow, WM_SETFONT, (WPARAM)hFont, MAKELPARAM(TRUE, 0));
 
     RECT clientarea;
     GetClientRect(mainwindow, &clientarea);
     int csizex = clientarea.right-clientarea.left, csizey = clientarea.bottom-clientarea.top;
 
-    CreateWindow(L"BUTTON", L"Close", WS_TABSTOP | WS_VISIBLE | WS_CHILD | BS_DEFPUSHBUTTON, csizex - 110, csizey - 40, 100, 30, mainwindow, (HMENU)IDCLOSE, instance, 0);
-    CreateWindow(L"BUTTON", L"Refresh", WS_TABSTOP | WS_VISIBLE | WS_CHILD | BS_DEFPUSHBUTTON, 680, csizey - 40, 100, 30, mainwindow, (HMENU)ID_REFRESHBTN, instance, 0);
+    SendMessage(CreateWindow(L"BUTTON", L"Close", WS_TABSTOP | WS_VISIBLE | WS_CHILD | BS_DEFPUSHBUTTON, csizex - 110, csizey - 40, 100, 30, mainwindow, (HMENU)IDCLOSE, instance, 0), WM_SETFONT, (WPARAM)hFont, MAKELPARAM(TRUE, 0));
+    SendMessage(CreateWindow(L"BUTTON", L"Refresh", WS_TABSTOP | WS_VISIBLE | WS_CHILD | BS_DEFPUSHBUTTON, 680, csizey - 40, 100, 30, mainwindow, (HMENU)ID_REFRESHBTN, instance, 0), WM_SETFONT, (WPARAM)hFont, MAKELPARAM(TRUE, 0));
 
     addresslabel = CreateWindow(WC_STATIC, L"Select a server", WS_CHILD | WS_VISIBLE | SS_NOTIFY, 10, csizey-35, 170, 16, mainwindow, (HMENU)ID_ADDRESSLABEL, instance, 0);
     serverinfolabel = CreateWindow(WC_STATIC, L"", WS_CHILD | WS_VISIBLE, 180, csizey-35, 300, 16, mainwindow, (HMENU)ID_SERVERINFOLABEL, instance, 0);
     
-    // SendMessage(button, WM_SETFONT, (WPARAM)hFont, MAKELPARAM(TRUE, 0));
-    // SendMessage(bittom, WM_SETFONT, (WPARAM)hFont, MAKELPARAM(TRUE, 0));
-    // SendMessage(addresslabel, WM_SETFONT, (WPARAM)hFont, MAKELPARAM(TRUE, 0));
+    SendMessage(addresslabel, WM_SETFONT, (WPARAM)hFont, MAKELPARAM(TRUE, 0));
+    SendMessage(serverinfolabel, WM_SETFONT, (WPARAM)hFont, MAKELPARAM(TRUE, 0));
 
     // LVS_LIST means we get a details view with columns
     serverlist = CreateWindow(WC_LISTVIEW,  L"", WS_CHILD | WS_VISIBLE | WS_BORDER | LVS_REPORT | LVS_SINGLESEL | LVS_SHOWSELALWAYS, 10, 10, 660, csizey-50, mainwindow, (HMENU)ID_SERVERLIST, instance, 0);
