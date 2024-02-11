@@ -162,6 +162,22 @@ void CopySelectedServerAddress()
     PlaySound(L"MouseClick", NULL, SND_SYNC); 
 }
 
+void UpdateServerInfo(struct QueryServer* svr)
+{
+    WCHAR serverinfo[64];
+    int len = _snwprintf(serverinfo, 64, L"Axis: %d Allies: %d", svr->tickets[0], svr->tickets[1]);
+
+    if(svr->roundTimeRemaining != -1){
+        len += _snwprintf(serverinfo + len, 64 - len, L" Timer: %d:%02d", svr->roundTimeRemaining / 60, svr->roundTimeRemaining % 60);
+    }
+    else wcscat_s(serverinfo, 64, L" Timer: none");
+
+    if(svr->punkbuster) wcscat_s(serverinfo, 64, L" [PB]");
+    if(svr->passworded) wcscat_s(serverinfo, 64, L" [PW]");
+
+    SetWindowText(serverinfolabel, serverinfo);
+}
+
 void SelectServer(int index)
 {
     printf("selecting server %d\n", index);
@@ -203,12 +219,11 @@ void SelectServer(int index)
             li.iSubItem = 2; // ping
             li.pszText = pingstr;
             ListView_SetItem(playerlist, &li);
-
-            WCHAR serverinfo[64];
-            _snwprintf(serverinfo, 64, L"Axis: %d Allies: %d Timer: %d:%02d", svr->tickets[0], svr->tickets[1], svr->roundTimeRemaining / 60, svr->roundTimeRemaining % 60);
-            SetWindowText(serverinfolabel, serverinfo);
         }
     }
+
+    UpdateServerInfo(svr);
+
     ReleaseMutex(queryState->mutex);
 }
 
@@ -613,9 +628,7 @@ void PulseTimer()
             ListView_SetItemText(serverlist, i, 5, svr->modname);
 
             if(i == selectedServer){
-                WCHAR serverinfo[64];
-                _snwprintf(serverinfo, 64, L"Axis: %d Allies: %d Timer: %d:%02d", svr->tickets[0], svr->tickets[1], svr->roundTimeRemaining / 60, svr->roundTimeRemaining % 60);
-                SetWindowText(serverinfolabel, serverinfo);
+                UpdateServerInfo(svr);
             }
         }
     }
