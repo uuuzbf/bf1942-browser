@@ -76,6 +76,23 @@ struct QueryPlayer* AllocPlayers(unsigned int count)
     return calloc(count, sizeof(struct QueryPlayer));
 }
 
+
+int SortPlayers_compare(const void* lv, const void* rv)
+{
+    const struct QueryPlayer* left = lv;
+    const struct QueryPlayer* right = rv;
+    int cmp = (left->score < right->score) - (left->score > right->score);
+    if(cmp) return cmp;
+    cmp = (left->kills < right->kills) - (left->kills > right->kills);
+    if(cmp) return cmp;
+    return (left->deaths > right->deaths) - (left->deaths < right->deaths);
+}
+
+void SortPlayers(struct QueryPlayer* players, unsigned int count)
+{
+    qsort(players, count, sizeof(players[0]), SortPlayers_compare);
+}
+
 struct QueryServer* AddServer(const char* ip, unsigned short queryport)
 {
     // calloc returns zeroed memory

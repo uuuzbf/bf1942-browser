@@ -491,6 +491,7 @@ void LoadServerListFromJSON(char* json, DWORD length)
                 player->ping = (int)cJSON_GetNumberValue(cJSON_GetObjectItem(jplayer, "ping"));
             }
 
+            SortPlayers(players, numPlayers);
             svr->players = players;
             svr->playersLength = numPlayers;
         }
