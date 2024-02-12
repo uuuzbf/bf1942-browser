@@ -43,32 +43,45 @@ void utf8ToWideBuffer(const char* str, WCHAR* outbuff, int outbufflen)
 #define GS_NO_INDEX (~(unsigned int)0)
 char* GSParseNextKV(char** source, char** value, unsigned int* index)
 {
-    // when at the start of the string, remove first backslash
-    char* s = *source;
-    if(*s == '\\')s++;
-    char* key_end = strchr(s, '\\');
-    if(!key_end || key_end == s) return 0; // error: missing key end or empty key
-    *key_end = 0; // replace key-value delimiter \ with nullbyte
+    char* key = *source;
+    // if the first character is a backslash, skip it
+    if(*key == '\\')key++;
+    // find the next backslash, the end of the key
+    char* key_end = strchr(key, '\\');
+    // check if there is a proper key
+    if(!key_end || key_end == key) return 0; // error: missing key-value backslash or empty key
+    // replace key-value delimiter backslash with nullbyte
+    *key_end = 0;
+
+    // start searching for an underscore at the end of the key
     char* index_start = key_end - 1;
-    while(isdigit(*index_start)) index_start--; // walk backwards while there are digits
+    // walk backwards while there are digits and the beginning of the key is not reached
+    while(isdigit(*index_start) && index_start != key) index_start--;
+    // if the search stopped at an underscore and there are digits after it
     if(*index_start == '_' && (index_start + 1) != key_end){
         // index not empty
-        *(index_start++) = 0; // replace key-index delimiter _ with nullbyte
-        *index = strtoul(index_start, 0, 10);
+        *(index_start++) = 0; // replace key-index delimiter underscore with nullbyte
+        *index = strtoul(index_start, 0, 10); // parse index as base-10 unsigned integer
     }
     else {
-        *index = GS_NO_INDEX;
+        *index = GS_NO_INDEX; // key has no index
     }
-    char* key = s;
-    s = key_end + 1;
-    char* value_end = strchr(s, '\\');
-    *value = s;
+
+    // set value ptr to after the key-value delimiter
+    *value = key_end + 1;
+    // look for the backslash between the value and the next key
+    char* value_end = strchr(*value, '\\');
     if(value_end){
-        // \ found before next key, zero it and set the source pointer after it
+        // backslash found before next key, zero it to terminate the value string
         *value_end = 0;
+        // set the source pointer after the trailing backslash
         *source = value_end + 1;
     }
-    else *source = 0; // mark end of source string
+    else {
+        // last value has no trailing backslash
+        // mark end of source string by setting it to null
+        *source = 0;
+    }
     return key;
 }
 
