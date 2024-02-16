@@ -312,7 +312,7 @@ DWORD __stdcall QueryThreadMain(void* arg)
             for(;;) {
                 int recvlen = sizeof(remote);
                 res = recvfrom(params.querysocket, buffer, 1500, 0, (struct sockaddr*)&remote, &recvlen);
-                printf("data from %s:%d length %d\n", inet_ntoa(remote.sin_addr), ntohs(remote.sin_port), res);
+                printf("data from %s:%d length %d err %d\n", inet_ntoa(remote.sin_addr), ntohs(remote.sin_port), res, WSAGetLastError());
                 if(res < 0) break;
 
                 // is it a SERVER_INFO_RESPONSE from a game port? see QUERY_SERVER_INFO in SendServerQuery
