@@ -39,6 +39,39 @@ void utf8ToWideBuffer(const char* str, WCHAR* outbuff, int outbufflen)
     outbuff[outbufflen - 1] = 0;
 }
 
+void bf1942ToWideBuffer(const char* str, WCHAR*outbuff, int outbufflen)
+{
+    if(outbufflen < 1) return;
+    if(outbufflen == 1) {
+        *outbuff = 0;
+        return;
+    }
+    // determine if the string should be parsed as cyrillic
+    // algorithm is from henk's datafield
+    int latinCount = 0;
+    int cyrillicCount = 0;
+    for(const uint8_t* c = (const uint8_t*)str; *c; c++){
+        uint8_t C = *c;
+        if((C >= 'A' && C <= 'Z') || (C >= 'a' && C <= 'Z')) latinCount++;
+        else if(C >= 0xC0) cyrillicCount++; // codes above 0xC0 are used for cyrillic
+    }
+    bool isCyrillic = (latinCount + cyrillicCount) > 0 && (((float)cyrillicCount / (latinCount + cyrillicCount)) >= 0.8);
+
+    for(const uint8_t* c = (const uint8_t*)str; *c; c++){
+        uint8_t C = *c;
+        WCHAR W;
+        // replace control characters and latin1 non printable
+        if(C < 0x20 || (C >= 0x7F && C <= 0x9F)) W = UNICODE_NOCHAR;
+        else if(isCyrillic && C >= 0xC0) W = (WCHAR)C - 0xC0 + 0x0410; // 0xC0... is mapped to unicode 0x0410... characters
+        else W = C; // rest is latin1 which directly maps to unicode character codes
+        // copy character to output buffer
+        *(outbuff++) = W;
+        // decrement buffer length, check if space is only enough for the terminating null character
+        if(--outbufflen == 1) break;
+    }
+    *outbuff = 0;
+}
+
 // parses \key_INDEX\value\ into key, INDEX and value
 #define GS_NO_INDEX (~(unsigned int)0)
 char* GSParseNextKV(char** source, char** value, unsigned int* index)
@@ -187,23 +220,26 @@ void HandleInfoResponse(struct QueryServer* svr, char* data, size_t length)
     for(;;){
         char* value;
         unsigned int index;
+        
+        if(data == 0){
+            printf("query end of data\n");
+            // end of data
+            break;
+        }
+
         char* key = GSParseNextKV(&data, &value, &index);
         if(key == 0) {
             printf("query parse error\n");
             // parse error
             break;
         }
-        if(data == 0){
-            printf("query end of data\n");
-            // end of data
-            break;
-        }
-        if(!strcmp(key, "hostname")) utf8ToWideBuffer(value, svr->hostname, ARRAYSIZE(svr->hostname));
-        else if(!strcmp(key, "gameId")) utf8ToWideBuffer(value, svr->modname, ARRAYSIZE(svr->modname));
-        else if(!strcmp(key, "gametype")) utf8ToWideBuffer(value, svr->gamemode, ARRAYSIZE(svr->gamemode));
-        else if(!strcmp(key, "mapname")) utf8ToWideBuffer(value, svr->mapname, ARRAYSIZE(svr->mapname));
-        else if(!strcmp(key, "maxplayers")) svr->maxPlayers = strtol(value, 0, 10);
-        else if(!strcmp(key, "numplayers")) svr->playerCount = strtol(value, 0, 10);
+        
+        if(!strcmp(key, "hostname")) bf1942ToWideBuffer(value, svr->hostname, ARRAYSIZE(svr->hostname));
+        else if(!strcmp(key, "gameId")) bf1942ToWideBuffer(value, svr->modname, ARRAYSIZE(svr->modname));
+        else if(!strcmp(key, "gametype")) bf1942ToWideBuffer(value, svr->gamemode, ARRAYSIZE(svr->gamemode));
+        else if(!strcmp(key, "mapname")) bf1942ToWideBuffer(value, svr->mapname, ARRAYSIZE(svr->mapname));
+        else if(!strcmp(key, "maxplayers")) svr->maxPlayers = (uint8_t)strtol(value, 0, 10);
+        else if(!strcmp(key, "numplayers")) svr->playerCount = (uint8_t)strtol(value, 0, 10);
         else if(!strcmp(key, "roundTimeRemain")) svr->roundTimeRemaining = strtol(value, 0, 10);
         else if(!strcmp(key, "tickets1")) svr->tickets[0] = strtol(value, 0, 10);
         else if(!strcmp(key, "tickets2")) svr->tickets[1] = strtol(value, 0, 10);
