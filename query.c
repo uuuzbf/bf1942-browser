@@ -306,7 +306,7 @@ DWORD __stdcall QueryThreadMain(void* arg)
         }
         if(WaitForSingleObject(params.mutex, INFINITE) == WAIT_FAILED)break;
         if(can_read){
-            char buffer[1500];
+            char buffer[1501];
             struct sockaddr_in remote;
             int res;
             for(;;) {
@@ -327,6 +327,9 @@ DWORD __stdcall QueryThreadMain(void* arg)
                     }
                     continue;
                 }
+
+                // make sure there is a null terminator
+                buffer[res] = 0;
 
                 struct QueryServer* svr = GetServerByQueryAddress(&remote);
                 if(!svr) continue;
