@@ -178,26 +178,9 @@ void UpdateServerInfo(struct QueryServer* svr)
     SetWindowText(serverinfolabel, serverinfo);
 }
 
-void SelectServer(int index)
+// needs a cleared player list!
+void PopulatePlayerList(struct QueryServer* svr)
 {
-    printf("selecting server %d\n", index);
-    ListView_DeleteAllItems(playerlist);
-
-    struct QueryServer* svr = GetServerByIndex(index);
-    if(!svr){
-        printf("ConnectToServer - unknown server\n");
-        return;
-    }
-
-    WaitForSingleObject(queryState->mutex, INFINITE);
-    WCHAR address[32];
-    _snwprintf(address, 32, L"%hs:%d", inet_ntoa(svr->queryAddress.sin_addr), svr->hostPort); // %hs is MSVC specific
-    SetWindowText(addresslabel, address);
-
-    // query info when server selected
-    svr->needInfo = true;
-    svr->needPing = true;
-
     // if there are no players on the server this array will be missing
     if(svr->players != 0){
         for(unsigned i = 0; i < svr->playersLength; i++){
@@ -221,6 +204,29 @@ void SelectServer(int index)
             ListView_SetItem(playerlist, &li);
         }
     }
+}
+
+void SelectServer(int index)
+{
+    printf("selecting server %d\n", index);
+    ListView_DeleteAllItems(playerlist);
+
+    struct QueryServer* svr = GetServerByIndex(index);
+    if(!svr){
+        printf("ConnectToServer - unknown server\n");
+        return;
+    }
+
+    WaitForSingleObject(queryState->mutex, INFINITE);
+    WCHAR address[32];
+    _snwprintf(address, 32, L"%hs:%d", inet_ntoa(svr->queryAddress.sin_addr), svr->hostPort); // %hs is MSVC specific
+    SetWindowText(addresslabel, address);
+
+    // query info when server selected
+    svr->needInfo = true;
+    svr->needPing = true;
+
+    PopulatePlayerList(svr);
 
     UpdateServerInfo(svr);
 
@@ -467,8 +473,8 @@ void LoadServerListFromJSON(char* json, DWORD length)
             continue;
         }
         svr->hostPort = (unsigned short)cJSON_GetNumberValue(hostport);
-        svr->maxPlayers = (int)cJSON_GetNumberValue(cJSON_GetObjectItem(query, "maxplayers"));
-        svr->playerCount = (int)cJSON_GetNumberValue(cJSON_GetObjectItem(query, "numplayers"));
+        svr->maxPlayers = (uint8_t)cJSON_GetNumberValue(cJSON_GetObjectItem(query, "maxplayers"));
+        svr->playerCount = (uint8_t)cJSON_GetNumberValue(cJSON_GetObjectItem(query, "numplayers"));
         utf8ToWideBuffer(cJSON_GetStringValue(cJSON_GetObjectItem(query, "hostname")), svr->hostname, ARRAYSIZE(svr->hostname));
         utf8ToWideBuffer(cJSON_GetStringValue(cJSON_GetObjectItem(query, "mapname")), svr->mapname, ARRAYSIZE(svr->mapname));
         utf8ToWideBuffer(cJSON_GetStringValue(cJSON_GetObjectItem(query, "gameId")), svr->modname, ARRAYSIZE(svr->modname));
@@ -590,12 +596,22 @@ void PulseSecond()
     struct QueryServer* svr = GetSelectedServer();
     if(svr){
         if(svr->pendingQuery == 0){
-            svr->needInfo = true;
-            svr->needPing = true;
+            if(svr->playerCount != 0 && 
+                (svr->playersLastUpdated == 0 ||
+                (seconds() - svr->playersLastUpdated) > 15) ||
+                svr->playerCount != svr->playersLength)
+            {
+                svr->needPlayers = true;
+
+            }
+            else {
+                svr->needInfo = true;
+                svr->needPing = true;
+            }
         }
         else {
-            // probably a timeout occured, reset pending query so next time new requests are sent
-            svr->pendingQuery = 0;
+            // probably a timeout or error occured, reset pending query so next time new requests are sent
+            ResetPendingQuery(svr);
         }
     }
 
@@ -630,6 +646,14 @@ void PulseTimer()
             if(i == selectedServer){
                 UpdateServerInfo(svr);
             }
+            svr->infoUpdated = false;
+        }
+        if(svr->playersUpdated){
+            ListView_DeleteAllItems(playerlist);
+            SortPlayers(svr->players, svr->playerCount);
+            PopulatePlayerList(svr);
+
+            svr->playersUpdated = false;
         }
     }
     

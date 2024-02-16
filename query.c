@@ -7,6 +7,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
+#include <time.h>
 #include <WinSock2.h>
 #include "query.h"
 
@@ -19,12 +20,19 @@ enum {
 
 struct QueryState params;
 LARGE_INTEGER performanceFrequency;
+__time64_t secondsZero;
 
+// time in milliseconds
 unsigned int ticks()
 {
     LARGE_INTEGER now;
     QueryPerformanceCounter(&now);
     return (unsigned int)(now.QuadPart / (performanceFrequency.QuadPart / 1000));
+}
+
+unsigned int seconds()
+{
+    return (unsigned int)(_time64(0) - secondsZero);
 }
 
 void utf8ToWideBuffer(const char* str, WCHAR* outbuff, int outbufflen)
@@ -122,6 +130,22 @@ struct QueryPlayer* AllocPlayers(unsigned int count)
 {
     if(count < 1 || count > 256) return 0;
     return calloc(count, sizeof(struct QueryPlayer));
+}
+
+struct QueryPlayer* ReallocPlayers(struct QueryPlayer* players, unsigned int oldCount, unsigned int count)
+{
+    if(count < 1 || count > 256) {
+        free(players);
+        return 0;
+    }
+    struct QueryPlayer* result = realloc(players, sizeof(*players) * count);
+    if(result){
+        if(oldCount < count){
+            memset(result + oldCount, 0, sizeof(*result) * (count - oldCount));
+        }
+    }
+    else free(players);
+    return result;
 }
 
 
@@ -247,12 +271,244 @@ void HandleInfoResponse(struct QueryServer* svr, char* data, size_t length)
         else if(!strcmp(key, "sv_punkbuster")) svr->punkbuster = strtol(value, 0, 10) != 0;
         else if(!strcmp(key, "final")) final = true;
         else continue;
-        printf(" parsed %s[%i] = %s\n", key, index, value);
+        //printf(" parsed %s[%i] = %s\n", key, index, value);
     }
     if(final){        
         svr->pendingQuery = QUERY_NONE;
         svr->infoUpdated = true;
     }
+}
+
+void HandlePlayersResponse(struct QueryServer* svr, char* data, size_t length)
+{
+    if(svr->playersNewLength == 0){
+        // this runs on the first received player list response
+        ResetPlayerQuery(svr);
+
+        svr->playersNewLength = svr->playerCount;
+
+        // maybe dont send player requests to empty servers, but if we do, allocate space for atleast one player
+        if(svr->playersNewLength == 0) svr->playersNewLength = 1;
+
+        svr->playersNew = AllocPlayers(svr->playersNewLength);
+        if(!svr->playersNew){
+            printf("HandlePlayersResponse AllocPlayers %u failed\n", svr->playersNewLength);
+            svr->playersNewLength = 0;
+            return;
+        }
+    }
+    bool final = false;
+    uint8_t packetID = 0; // 0 is invalid, id is always >= 1
+
+    for(;;){
+        char* value;
+        unsigned int index;
+        if(data == 0){
+            printf("query end of data\n");
+            // end of data
+            break;
+        }
+        char* key = GSParseNextKV(&data, &value, &index);
+        if(key == 0) {
+            printf("query parse error\n");
+            goto fatal_parse_error;
+        }
+
+        if(!strcmp(key, "final")) {
+            final = true;
+            printf("final!\n");
+            continue;
+        } else if(!strcmp(key, "queryid")){
+            printf("queryid = %s\n", value);
+            char* p = strchr(value, '.');
+            // make sure a dot is found and there are only 1 or 2 digits after it
+            if((p++) && isdigit(p[0]) && (!p[1] || (isdigit(p[1]) && !p[2]))){
+                packetID = (uint8_t)strtoul(p, 0, 10);
+            }
+            if(packetID < 1 || packetID > 30){
+                printf("invalid packet id %u in queryid\n", packetID);
+                goto fatal_parse_error;
+            }
+            continue;
+        } else if(!strcmp(key, "teamname")){
+            // teamname is "axis" and "allied", hardcoded on the server, discard it
+            continue;
+        }
+
+        // rest of the keys must have index
+        if(index == GS_NO_INDEX) {
+            printf("key %s missing index\n", key);
+            goto fatal_parse_error;
+        }
+
+        // max index should be 255
+        if(index > 255) {
+            printf("key %s has invalid index %u\n", key, index);
+            goto fatal_parse_error;
+        }
+
+#if 0
+        // reallocate players buffer if index is out of range
+        if(index >= svr->playersNewLength) {
+            unsigned int newLength = index + 1;
+            printf("ReallocPlayers %u -> %u\n", svr->playersNewLength, newLength);
+            svr->playersNew = ReallocPlayers(svr->playersNew, svr->playersNewLength, newLength);
+            if(!svr->playersNew){
+                printf("HandlePlayersResponse ReallocPlayers %u -> %u failed\n", svr->playersNewLength, newLength);
+                svr->playersNewLength = 0;
+                return;
+            }
+            svr->playersNewLength = newLength;
+        }
+#else
+        // ignore if index outside buffer
+        if(index >= svr->playersNewLength) {
+            printf("dropping garbage player index %u\n", index);
+            continue;
+        }
+#endif
+
+        if(!strcmp(key, "playername")) {
+            bf1942ToWideBuffer(value, svr->playersNew[index].name, ARRAYSIZE(svr->playersNew[index].name));
+            //svr->playersNew[index].data_mask |= PLAYER_HAS_NAME;
+        } else if(!strcmp(key, "ping")) {
+            svr->playersNew[index].ping = (short)strtol(value, 0, 10);
+            //svr->playersNew[index].data_mask |= PLAYER_HAS_PING;
+        } else if(!strcmp(key, "score")) {
+            svr->playersNew[index].score = (short)strtol(value, 0, 10);
+            //svr->playersNew[index].data_mask |= PLAYER_HAS_SCORE;
+        } else if(!strcmp(key, "kills")) {
+            svr->playersNew[index].kills = (short)strtol(value, 0, 10);
+            //svr->playersNew[index].data_mask |= PLAYER_HAS_KILLS;
+        } else if(!strcmp(key, "deaths")) {
+            svr->playersNew[index].deaths = (short)strtol(value, 0, 10);
+            //svr->playersNew[index].data_mask |= PLAYER_HAS_DEATHS;
+        } else if(!strcmp(key, "team")) {
+            svr->playersNew[index].team = (unsigned char)strtoul(value, 0, 10);
+            //svr->playersNew[index].data_mask |= PLAYER_HAS_TEAM;
+        //} else if(!strcmp(key, "keyhash")) {
+            // discard keyhash but use the index to update maxIdx
+        } else continue;
+
+        if(svr->playersNewMaxIdx == GS_NO_INDEX || svr->playersNewMaxIdx < index) svr->playersNewMaxIdx = index;
+        //printf(" parsed %s[%i] = %s\n", key, index, value);
+    }
+
+    // edge cases:
+    // - 1 packet received, id 1, no players, no indexes seen at all
+    // - n packets received, n contains no indexes, highest index unknown?
+    // - n packets received, n-1 packet is lost, can only be detected by tracking packet ids
+    // - received packet id higher than final packet's id
+    // - duplicate packets: need to track which packet ids were received
+    // - reordered packets: previous packets may arrive after final packet
+
+    if(packetID == 0){
+        printf("no queryid parsed, missing packet id\n");
+        goto fatal_parse_error;
+    }
+
+    // first packet is always 1, make packetID zero based
+    packetID--;
+
+    // check for duplicated packets
+    if(svr->receivedPacketMask & (1 << packetID)){
+        printf("packet id %u already received\n", packetID + 1);
+        // maybe allow this, parsing a packet twice shouldn't cause any issues
+        // but if this is a final packet it would trip the check below
+        goto fatal_parse_error;
+    }
+
+    // add packet to received packets mask
+    svr->receivedPacketMask |= 1 << packetID;
+    printf("registered packet %u -> %X\n", packetID, svr->receivedPacketMask);
+
+    if(final){       
+        if(svr->finalPacketNumber != 255){
+            printf("multiple final packets\n");
+            goto fatal_parse_error;
+        }
+        printf("final packet: %d\n", packetID);
+        svr->finalPacketNumber = packetID; 
+    }
+
+    if(svr->finalPacketNumber != 255){
+        if(svr->finalPacketNumber < packetID){
+            printf("received packet ID %u higher than final packet id %u\n", packetID, svr->finalPacketNumber);
+            goto fatal_parse_error;
+        }
+
+        // we already got the last packet, check to see if we have all packets
+        uint32_t maskAllPackets = (1 << (svr->finalPacketNumber + 1)) - 1;
+        if(maskAllPackets != svr->receivedPacketMask){
+            printf("missing packets before final: %08X/%08X\n", maskAllPackets, svr->receivedPacketMask);
+            return;
+        }
+
+        printf("HandlePlayersResponse all packets!\n");
+        if(svr->playersNew){
+            if(svr->playersNewMaxIdx != GS_NO_INDEX){
+                unsigned int newLength = svr->playersNewMaxIdx + 1;
+                struct QueryPlayer* new = ReallocPlayers(svr->playersNew, svr->playersNewLength, newLength);
+                svr->playersNew = 0; // playersNew was invalid after previous line
+                if(new){
+                    if(svr->players){
+                        free(svr->players);
+                    }
+                    svr->players = new;
+                    svr->playersLength = newLength;
+                    svr->playersUpdated = true;
+                    svr->playersLastUpdated = seconds();
+                    printf("updated player list %u maxidx: %u\n", svr->playersLength, svr->playersNewMaxIdx);
+                }
+                else {
+                    svr->playersNew = 0;
+                    printf("ReallocPlayers failed in final\n");
+                }
+            }
+            else {
+                free(svr->playersNew);
+                svr->playersNew = 0;
+                if(svr->players){
+                    free(svr->players);
+                    svr->players = 0;
+                }
+                svr->playersLength = 0;
+                printf("no player indices, players cleared\n");
+                svr->playersUpdated = true;
+                svr->playersLastUpdated = seconds();
+            }
+        }
+        else {
+            printf("playersNew is null!\n");
+        }
+        ResetPlayerQuery(svr);
+        svr->pendingQuery = QUERY_NONE;
+    }
+    return;
+fatal_parse_error:
+    printf("HandlePlayersResponse fatal_parse_error\n");
+    ResetPlayerQuery(svr);
+    svr->pendingQuery = QUERY_NONE;
+}
+
+// resets the state variables for a \players\ query
+void ResetPlayerQuery(struct QueryServer* svr)
+{
+    if(svr->playersNew){
+        printf("ResetPlayerQuery freed playersNew\n");
+        free(svr->playersNew);
+        svr->playersNew = 0;
+    }
+    svr->playersNewLength = 0;
+    svr->playersNewMaxIdx = GS_NO_INDEX;
+    svr->finalPacketNumber = 255;
+    svr->receivedPacketMask = 0;
+}
+
+void ResetPendingQuery(struct QueryServer* svr)
+{
+    if(svr->pendingQuery == QUERY_PLAYERS) ResetPlayerQuery(svr);
+    svr->pendingQuery = QUERY_NONE;
 }
 
 void HandleServerResponse(struct QueryServer* svr, char* data, size_t length)
@@ -261,6 +517,8 @@ void HandleServerResponse(struct QueryServer* svr, char* data, size_t length)
 
     if(svr->pendingQuery == QUERY_INFO){
         HandleInfoResponse(svr, data, length);
+    } else if(svr->pendingQuery == QUERY_PLAYERS){
+        HandlePlayersResponse(svr, data, length);
     }
 }
 
@@ -320,7 +578,7 @@ DWORD __stdcall QueryThreadMain(void* arg)
                 if(res >= 7 && ((*(uint32_t*)&buffer[0]) & 0x00F000FF) == 0x00A00001){
                     struct QueryServer* svr = GetServerByGameAddress(&remote);
                     if(svr && svr->pingSendTime != 0) {
-                        svr->ping = ticks() - svr->pingSendTime;
+                        svr->ping = (int16_t)(ticks() - svr->pingSendTime);
                         svr->pingSendTime = 0;
                         svr->pingUpdated = true;
                         printf("SERVER_INFO_RESPONSE %dms\n", svr->ping);
@@ -367,6 +625,7 @@ struct QueryState* QueryInit()
     }
 
     QueryPerformanceFrequency(&performanceFrequency);
+    _time64(&secondsZero);
 
     params.mutex = CreateMutex(0, false, 0);
 
