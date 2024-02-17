@@ -22,7 +22,8 @@ enum {
     ID_SERVERINFOLABEL,
     ID_REFRESHBTN,
     ID_PULSE_TIMER,
-    ID_SECOND_TIMER
+    ID_SECOND_TIMER,
+    ID_DISABLE_QUERY_THREAD_TIMER,
 };
 
 void ReloadServers();
@@ -311,10 +312,21 @@ LRESULT __stdcall WndProcMain(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             if(wParam == WA_ACTIVE || wParam == WA_CLICKACTIVE){
                 SetTimer(mainwindow, ID_PULSE_TIMER, 200, 0);
                 SetTimer(mainwindow, ID_SECOND_TIMER, 2000, 0);
+                // enable query thread and kill the disable timer if it exists
+                if(queryState){
+                    SetEvent(queryState->sleepevent);
+                    queryState->wantSleep = false;
+                }
+                KillTimer(mainwindow, ID_DISABLE_QUERY_THREAD_TIMER);
             }
             else if(wParam == WA_INACTIVE){
                 KillTimer(mainwindow, ID_PULSE_TIMER);
                 KillTimer(mainwindow, ID_SECOND_TIMER);
+                // call reset queryState->sleep event after a delay so the query thread stops
+                if(queryState){
+                    queryState->wantSleep = true;
+                }
+                SetTimer(mainwindow, ID_DISABLE_QUERY_THREAD_TIMER, 2000, 0);
             }
             break;
         case WM_NOTIFY:{
@@ -328,6 +340,11 @@ LRESULT __stdcall WndProcMain(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
         case WM_TIMER:
             if(wParam == ID_PULSE_TIMER) PulseTimer();
             else if(wParam == ID_SECOND_TIMER) PulseSecond();
+            else if(wParam == ID_DISABLE_QUERY_THREAD_TIMER){
+                // kill this timer and stop the query thread
+                KillTimer(mainwindow, wParam);
+                if(queryState)ResetEvent(queryState->sleepevent);
+            }
             break;
 
     }

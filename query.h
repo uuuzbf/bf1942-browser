@@ -45,10 +45,12 @@ struct QueryServer {
 
 struct QueryState {
     HANDLE mutex;
+    HANDLE sleepevent;
     HANDLE thread;
     int querysocket;
     struct QueryServer* server;
     struct QueryServer* last_server;
+    bool wantSleep;
 };
 
 unsigned int seconds();

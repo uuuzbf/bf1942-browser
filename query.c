@@ -596,7 +596,7 @@ DWORD __stdcall QueryThreadMain(void* arg)
             }
         }
         unsigned int now = ticks();
-        if(now - lastSend >= 100){
+        if(now - lastSend >= 100 && !params.wantSleep){
             lastSend = now;
             int sends = 6;
             for(struct QueryServer* svr = params.server; svr != 0; svr = svr->next){
@@ -613,6 +613,9 @@ DWORD __stdcall QueryThreadMain(void* arg)
             }
         }
         ReleaseMutex(params.mutex);
+
+        // this event gets unset if the window loses focus, so this loops stops until the window has focus again
+        WaitForSingleObject(params.sleepevent, INFINITE);
     }
     dbgprintf("QueryThreadMain exits\n");
     return 0;
@@ -629,6 +632,7 @@ struct QueryState* QueryInit()
     _time64(&secondsZero);
 
     params.mutex = CreateMutex(0, false, 0);
+    params.sleepevent = CreateEvent(0, true, true, 0);
 
     struct WSAData d;
     WSAStartup(MAKEWORD(1, 1), &d);
