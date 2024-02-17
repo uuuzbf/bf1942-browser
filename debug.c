@@ -1,9 +1,47 @@
+#define UNICODE 1
+#define WIN32_LEAN_AND_MEAN
 #include <windows.h>
+#include <DbgHelp.h>
 #include <io.h>
 #include <fcntl.h>
 //#include <iostream>
 #include <stdbool.h>
 #include <stdio.h>
+
+
+LONG __stdcall ExceptionFilter(LPEXCEPTION_POINTERS x){
+    EXCEPTION_RECORD* xr = x->ExceptionRecord;
+    //CONTEXT* ctx = x->ContextRecord;
+    static WCHAR msg[128];
+    int n = wsprintf(msg, L"\nexception %08X at %p", xr->ExceptionCode, xr->ExceptionAddress);
+    if(xr->ExceptionCode == EXCEPTION_ACCESS_VIOLATION){
+        n += wsprintf(msg + n, xr->ExceptionInformation[0] == 0 ? L" reading %p\n" : L" writing %p\n", (void*)xr->ExceptionInformation[1]);
+    }
+    MessageBox(0, msg, L"BF1942 Server browser", MB_ICONERROR);
+    HMODULE dbghelp = LoadLibraryA("dbghelp.dll");
+    if(dbghelp != 0){
+        typedef BOOL __stdcall MiniDumpWriteDump_t(HANDLE, DWORD, HANDLE, MINIDUMP_TYPE, PMINIDUMP_EXCEPTION_INFORMATION, PMINIDUMP_USER_STREAM_INFORMATION, PMINIDUMP_CALLBACK_INFORMATION);
+        MiniDumpWriteDump_t* pMiniDumpWriteDump = (MiniDumpWriteDump_t*)GetProcAddress(dbghelp, "MiniDumpWriteDump");
+        if(pMiniDumpWriteDump != 0){
+            HANDLE file = CreateFile(L"browser_crash.dmp", GENERIC_WRITE, 0, 0, CREATE_ALWAYS, 0, 0);
+            if(file != 0){
+                MINIDUMP_EXCEPTION_INFORMATION excinfo;
+                excinfo.ThreadId = GetCurrentThreadId();
+                excinfo.ExceptionPointers = x;
+                excinfo.ClientPointers = FALSE;
+                pMiniDumpWriteDump(GetCurrentProcess(), GetCurrentProcessId(), file, MiniDumpNormal | MiniDumpWithFullMemoryInfo | MiniDumpWithFullMemory, &excinfo, 0, 0);
+                CloseHandle(file);
+                return EXCEPTION_EXECUTE_HANDLER;
+            }
+        }
+    }
+    return EXCEPTION_CONTINUE_SEARCH;
+}
+
+void InitCrashHandler()
+{
+    SetUnhandledExceptionFilter(ExceptionFilter);
+}
 
 
 // from https://stackoverflow.com/questions/311955/redirecting-cout-to-a-console-in-windows

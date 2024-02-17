@@ -52,7 +52,7 @@ struct QueryState {
 };
 
 unsigned int seconds();
-void utf8ToWideBuffer(const char* str, WCHAR* outbuff, int outbufflen);
+void UTF8ToWideBuffer(const char* str, WCHAR* outbuff, int outbufflen);
 
 struct QueryPlayer* AllocPlayers(unsigned int count);
 void SortPlayers(struct QueryPlayer* players, unsigned int count);

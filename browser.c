@@ -29,17 +29,6 @@ void ReloadServers();
 void PulseTimer();
 void PulseSecond();
 
-// return values of this are never freed so if you click around too much in the serverlist
-// eventually you run out of memory
-WCHAR* utf8ToWide(const char* str)
-{
-    int size = MultiByteToWideChar(CP_UTF8, MB_PRECOMPOSED, str, -1, 0, 0);
-    if(size <= 0) return 0;
-    WCHAR* result = malloc(size*sizeof(WCHAR));
-    MultiByteToWideChar(CP_UTF8, MB_PRECOMPOSED, str, -1, result, size);
-    return result;
-}
-
 WCHAR bf1942_path[1024];
 HWND mainwindow = 0;
 HWND serverlist = 0;
@@ -305,14 +294,6 @@ void __stdcall ListViewNotify(NMHDR* notify)
 LRESULT __stdcall WndProcMain(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 {
     switch(msg){
-        // case WM_ERASEBKGND:{
-        //     HDC dc = (HDC)wParam;
-        //     HBRUSH backgroundColor = GetStockObject(COLOR_BTNFACE + 1);
-        //     RECT rect;
-        //     GetClientRect(hwnd, &rect);
-        //     FillRect(dc, &rect, backgroundColor);
-        //     return 1;
-        // }
         case WM_COMMAND:
             dbgprintf("WM_COMMAND: %d\n", wParam);
             if(wParam == IDCLOSE){
@@ -323,12 +304,6 @@ LRESULT __stdcall WndProcMain(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
                 CopySelectedServerAddress();
             }
             break;
-        //case WM_SETFOCUS:
-        //    dbgprintf("SETFOCUS %08X -> %p\n", wParam, hwnd);
-        //    break;
-        //case WM_KILLFOCUS:
-        //    dbgprintf("KILLFOCUS %p -> %08X\n", hwnd, wParam);
-        //    break;
         case WM_ACTIVATE:
         //    dbgprintf("ACTIVATE %p state %d to %08X\n", hwnd, wParam, lParam);
             if(wParam == WA_ACTIVE || wParam == WA_CLICKACTIVE){
@@ -474,10 +449,10 @@ void LoadServerListFromJSON(char* json, DWORD length)
         svr->hostPort = (unsigned short)cJSON_GetNumberValue(hostport);
         svr->maxPlayers = (uint8_t)cJSON_GetNumberValue(cJSON_GetObjectItem(query, "maxplayers"));
         svr->playerCount = (uint8_t)cJSON_GetNumberValue(cJSON_GetObjectItem(query, "numplayers"));
-        utf8ToWideBuffer(cJSON_GetStringValue(cJSON_GetObjectItem(query, "hostname")), svr->hostname, ARRAYSIZE(svr->hostname));
-        utf8ToWideBuffer(cJSON_GetStringValue(cJSON_GetObjectItem(query, "mapname")), svr->mapname, ARRAYSIZE(svr->mapname));
-        utf8ToWideBuffer(cJSON_GetStringValue(cJSON_GetObjectItem(query, "gameId")), svr->modname, ARRAYSIZE(svr->modname));
-        utf8ToWideBuffer(cJSON_GetStringValue(cJSON_GetObjectItem(query, "gametype")), svr->gamemode, ARRAYSIZE(svr->gamemode));
+        UTF8ToWideBuffer(cJSON_GetStringValue(cJSON_GetObjectItem(query, "hostname")), svr->hostname, ARRAYSIZE(svr->hostname));
+        UTF8ToWideBuffer(cJSON_GetStringValue(cJSON_GetObjectItem(query, "mapname")), svr->mapname, ARRAYSIZE(svr->mapname));
+        UTF8ToWideBuffer(cJSON_GetStringValue(cJSON_GetObjectItem(query, "gameId")), svr->modname, ARRAYSIZE(svr->modname));
+        UTF8ToWideBuffer(cJSON_GetStringValue(cJSON_GetObjectItem(query, "gametype")), svr->gamemode, ARRAYSIZE(svr->gamemode));
         svr->tickets[0] = (int)cJSON_GetNumberValue(cJSON_GetObjectItem(query, "tickets1"));
         svr->tickets[1] = (int)cJSON_GetNumberValue(cJSON_GetObjectItem(query, "tickets2"));
         svr->roundTimeRemaining = (int)cJSON_GetNumberValue(cJSON_GetObjectItem(query, "roundTimeRemain"));
@@ -505,7 +480,7 @@ void LoadServerListFromJSON(char* json, DWORD length)
                 cJSON* jplayer = cJSON_GetArrayItem(jplayers, j);
                 if(!jplayer) continue;
                 struct QueryPlayer* player = players + j;
-                utf8ToWideBuffer(cJSON_GetStringValue(cJSON_GetObjectItem(jplayer, "playername")), player->name, ARRAYSIZE(player->name));
+                UTF8ToWideBuffer(cJSON_GetStringValue(cJSON_GetObjectItem(jplayer, "playername")), player->name, ARRAYSIZE(player->name));
                 player->score = (short)cJSON_GetNumberValue(cJSON_GetObjectItem(jplayer, "score"));
                 player->kills = (short)cJSON_GetNumberValue(cJSON_GetObjectItem(jplayer, "kills"));
                 player->deaths = (short)cJSON_GetNumberValue(cJSON_GetObjectItem(jplayer, "deaths"));

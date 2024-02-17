@@ -36,7 +36,7 @@ unsigned int seconds()
     return (unsigned int)(_time64(0) - secondsZero);
 }
 
-void utf8ToWideBuffer(const char* str, WCHAR* outbuff, int outbufflen)
+void UTF8ToWideBuffer(const char* str, WCHAR* outbuff, int outbufflen)
 {
     if(outbufflen <= 0) return;
     if(!str){
@@ -48,7 +48,7 @@ void utf8ToWideBuffer(const char* str, WCHAR* outbuff, int outbufflen)
     outbuff[outbufflen - 1] = 0;
 }
 
-void bf1942ToWideBuffer(const char* str, WCHAR*outbuff, int outbufflen)
+void BF1942StringToWideBuffer(const char* str, WCHAR*outbuff, int outbufflen)
 {
     if(outbufflen < 1) return;
     if(outbufflen == 1) {
@@ -259,10 +259,10 @@ void HandleInfoResponse(struct QueryServer* svr, char* data, size_t length)
             break;
         }
         
-        if(!strcmp(key, "hostname")) bf1942ToWideBuffer(value, svr->hostname, ARRAYSIZE(svr->hostname));
-        else if(!strcmp(key, "gameId")) bf1942ToWideBuffer(value, svr->modname, ARRAYSIZE(svr->modname));
-        else if(!strcmp(key, "gametype")) bf1942ToWideBuffer(value, svr->gamemode, ARRAYSIZE(svr->gamemode));
-        else if(!strcmp(key, "mapname")) bf1942ToWideBuffer(value, svr->mapname, ARRAYSIZE(svr->mapname));
+        if(!strcmp(key, "hostname")) BF1942StringToWideBuffer(value, svr->hostname, ARRAYSIZE(svr->hostname));
+        else if(!strcmp(key, "gameId")) BF1942StringToWideBuffer(value, svr->modname, ARRAYSIZE(svr->modname));
+        else if(!strcmp(key, "gametype")) BF1942StringToWideBuffer(value, svr->gamemode, ARRAYSIZE(svr->gamemode));
+        else if(!strcmp(key, "mapname")) BF1942StringToWideBuffer(value, svr->mapname, ARRAYSIZE(svr->mapname));
         else if(!strcmp(key, "maxplayers")) svr->maxPlayers = (uint8_t)strtol(value, 0, 10);
         else if(!strcmp(key, "numplayers")) svr->playerCount = (uint8_t)strtol(value, 0, 10);
         else if(!strcmp(key, "roundTimeRemain")) svr->roundTimeRemaining = strtol(value, 0, 10);
@@ -370,7 +370,7 @@ void HandlePlayersResponse(struct QueryServer* svr, char* data, size_t length)
 #endif
 
         if(!strcmp(key, "playername")) {
-            bf1942ToWideBuffer(value, svr->playersNew[index].name, ARRAYSIZE(svr->playersNew[index].name));
+            BF1942StringToWideBuffer(value, svr->playersNew[index].name, ARRAYSIZE(svr->playersNew[index].name));
             //svr->playersNew[index].data_mask |= PLAYER_HAS_NAME;
         } else if(!strcmp(key, "ping")) {
             svr->playersNew[index].ping = (short)strtol(value, 0, 10);
