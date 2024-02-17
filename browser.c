@@ -13,6 +13,7 @@
 
 #include "cjson/cJSON.h"
 #include "query.h"
+#include "debug.h"
 
 enum {
     ID_SERVERLIST = 100,
@@ -23,9 +24,6 @@ enum {
     ID_PULSE_TIMER,
     ID_SECOND_TIMER
 };
-
-// defined in show_console.c
-void InitConsole();
 
 void ReloadServers();
 void PulseTimer();
@@ -100,10 +98,10 @@ void initBF1942Path()
         if(h){
             fputws(bf1942_path, h);
             fclose(h);
-            printf("bf1942 path saved\n");
+            dbgprintf("bf1942 path saved\n");
         }
         else{
-            printf("failed to save path, unable to open txt file\n");
+            dbgprintf("failed to save path, unable to open txt file\n");
         }
     }
     // no path
@@ -119,12 +117,12 @@ int GetSelectedServerID()
 struct QueryServer* GetSelectedServer()
 {
     int selectedServer = GetSelectedServerID();
-    //printf("ConnectToServer selectedServer = %d\n", selectedServer);
+    //dbgprintf("ConnectToServer selectedServer = %d\n", selectedServer);
     if(selectedServer < 0) return 0;
     
     struct QueryServer* svr = GetServerByIndex(selectedServer);
     if(!svr){
-        printf("GetSelectedServer - unknown server\n");
+        dbgprintf("GetSelectedServer - unknown server\n");
         return 0;
     }
     return svr;
@@ -143,7 +141,7 @@ void CopySelectedServerAddress()
     if(length <= 0) return;
 
     if(!OpenClipboard(mainwindow)){
-        printf("OpenClipboard failed %d\n", GetLastError());
+        dbgprintf("OpenClipboard failed %d\n", GetLastError());
         return;
     }
 
@@ -209,12 +207,12 @@ void PopulatePlayerList(struct QueryServer* svr)
 
 void SelectServer(int index)
 {
-    printf("selecting server %d\n", index);
+    dbgprintf("selecting server %d\n", index);
     ListView_DeleteAllItems(playerlist);
 
     struct QueryServer* svr = GetServerByIndex(index);
     if(!svr){
-        printf("ConnectToServer - unknown server\n");
+        dbgprintf("ConnectToServer - unknown server\n");
         return;
     }
 
@@ -256,15 +254,15 @@ void ConnectToServer()
             bf_dir[i] = bf1942_path[i];
         }
     }
-    wprintf(L"executing \"%ls\" %ls\n", bf1942_path, exe_args);
-    wprintf(L"in dir \"%s\"\n", bf_dir);
+    dbgprintf("executing \"%ls\" %ls\n", bf1942_path, exe_args);
+    dbgprintf("in dir \"%ls\"\n", bf_dir);
 
     STARTUPINFO sui = {0};
     sui.cb = sizeof(sui);
     PROCESS_INFORMATION pi = {0};
     bool ok = CreateProcess(bf1942_path, exe_args, 0, 0, false, CREATE_NEW_PROCESS_GROUP, 0, bf_dir, &sui, &pi);
     if(!ok){
-        printf("CreateProcess failed: %d\n", GetLastError());
+        dbgprintf("CreateProcess failed: %d\n", GetLastError());
     }
     else {
         CloseHandle(pi.hProcess);
@@ -274,18 +272,18 @@ void ConnectToServer()
 
 void __stdcall ListViewNotify(NMHDR* notify)
 {
-    //printf("WM_NOTIFY: code=%d hwnd=%p id=%d\n", notify->code, notify->hwndFrom, notify->idFrom);
+    //dbgprintf("WM_NOTIFY: code=%d hwnd=%p id=%d\n", notify->code, notify->hwndFrom, notify->idFrom);
     NMITEMACTIVATE* act = (NMITEMACTIVATE*)notify;
     switch(notify->code){
         case NM_CLICK:
-            printf("clicked %d %d\n", act->iItem, act->iSubItem);
+            dbgprintf("clicked %d %d\n", act->iItem, act->iSubItem);
             break;
         case NM_DBLCLK:
             ConnectToServer();
             break;
         case LVN_ODSTATECHANGED:{
             NMLVODSTATECHANGE* ch = (NMLVODSTATECHANGE*)notify;
-            //printf("statechange %08X -> %08X %d-%d\n", ch->uOldState, ch->uNewState, ch->iFrom, ch->iTo);
+            //dbgprintf("statechange %08X -> %08X %d-%d\n", ch->uOldState, ch->uNewState, ch->iFrom, ch->iTo);
             if((ch->uNewState & LVIS_SELECTED) && !(ch->uOldState & LVIS_SELECTED)){
                 if(ch->iFrom != ch->iTo)MessageBox(0, L"wat", L"????", MB_ICONQUESTION);
                 SelectServer(ch->iFrom);
@@ -294,7 +292,7 @@ void __stdcall ListViewNotify(NMHDR* notify)
         }
         case LVN_ITEMCHANGED:{
             NMLISTVIEW* lv = (NMLISTVIEW*)notify;
-            //printf("itemchanged %d %d %08X -> %08X\n", lv->iItem, lv->iSubItem, lv->uOldState, lv->uNewState);
+            //dbgprintf("itemchanged %d %d %08X -> %08X\n", lv->iItem, lv->iSubItem, lv->uOldState, lv->uNewState);
             if((lv->uNewState & LVIS_SELECTED) && !(lv->uOldState & LVIS_SELECTED)){
                 SelectServer(lv->iItem);
             }
@@ -316,7 +314,7 @@ LRESULT __stdcall WndProcMain(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
         //     return 1;
         // }
         case WM_COMMAND:
-            printf("WM_COMMAND: %d\n", wParam);
+            dbgprintf("WM_COMMAND: %d\n", wParam);
             if(wParam == IDCLOSE){
                 DestroyWindow(hwnd);
             } else if(wParam == ID_REFRESHBTN){
@@ -326,13 +324,13 @@ LRESULT __stdcall WndProcMain(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             }
             break;
         //case WM_SETFOCUS:
-        //    printf("SETFOCUS %08X -> %p\n", wParam, hwnd);
+        //    dbgprintf("SETFOCUS %08X -> %p\n", wParam, hwnd);
         //    break;
         //case WM_KILLFOCUS:
-        //    printf("KILLFOCUS %p -> %08X\n", hwnd, wParam);
+        //    dbgprintf("KILLFOCUS %p -> %08X\n", hwnd, wParam);
         //    break;
         case WM_ACTIVATE:
-        //    printf("ACTIVATE %p state %d to %08X\n", hwnd, wParam, lParam);
+        //    dbgprintf("ACTIVATE %p state %d to %08X\n", hwnd, wParam, lParam);
             if(wParam == WA_ACTIVE || wParam == WA_CLICKACTIVE){
                 SetTimer(mainwindow, ID_PULSE_TIMER, 200, 0);
                 SetTimer(mainwindow, ID_SECOND_TIMER, 2000, 0);
@@ -369,32 +367,32 @@ char* GetServerList(DWORD* length)
     bool result = false;
     session = WinHttpOpen(0, WINHTTP_ACCESS_TYPE_DEFAULT_PROXY, WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0 /* flags */);
     if(session == 0){
-        printf("failed to create winhttp session\n");
+        dbgprintf("failed to create winhttp session\n");
         goto cleanup;
     }
     connect = WinHttpConnect(session, L"master.bf1942.org", INTERNET_DEFAULT_PORT, 0);
     if(connect == 0){
-        printf("failed to create winhttp connect\n");
+        dbgprintf("failed to create winhttp connect\n");
         goto cleanup;
     }
     // flag WINHTTP_FLAG_SECURE may be useful later
     // https://learn.microsoft.com/en-us/windows/win32/api/winhttp/nf-winhttp-winhttpopenrequest
     request = WinHttpOpenRequest(connect, L"GET", L"/json/?full", 0 /* HTTP 1.1 */, WINHTTP_NO_REFERER, WINHTTP_DEFAULT_ACCEPT_TYPES, 0);
     if(request == 0){
-        printf("failed to create winhttp request\n");
+        dbgprintf("failed to create winhttp request\n");
         goto cleanup;
     }
     // https://learn.microsoft.com/en-us/windows/win32/api/winhttp/nf-winhttp-winhttpsendrequest
     result = WinHttpSendRequest(request, 0, 0, 0, 0, 0, 0);
     if(!result){
-        printf("request failed!\n");
+        dbgprintf("request failed!\n");
         goto cleanup;
     }
 
     // https://learn.microsoft.com/en-us/windows/win32/api/winhttp/nf-winhttp-winhttpreceiveresponse
     result = WinHttpReceiveResponse(request, 0);
     if(!result){
-        printf("receive response failed!\n");
+        dbgprintf("receive response failed!\n");
         goto cleanup;
     }
 
@@ -403,29 +401,29 @@ char* GetServerList(DWORD* length)
         DWORD bytes;
         // https://learn.microsoft.com/en-us/windows/win32/api/winhttp/nf-winhttp-winhttpquerydataavailable
         if(!WinHttpQueryDataAvailable(request, &bytes)){
-            printf("query data available failed\n");
+            dbgprintf("query data available failed\n");
             result = false; goto cleanup;
         }
         if(bytes == 0)break;
-        //printf("receiving %u bytes\n", bytes);
+        //dbgprintf("receiving %u bytes\n", bytes);
         DWORD new_body_length = body_length + bytes;
         if(new_body_length > 1024*1024*64){
             // a 64MB json file? huh this game was never that popular
-            printf("response json data too big!\n");
+            dbgprintf("response json data too big!\n");
             result = false; goto cleanup;
         }
         body = realloc(body, new_body_length + 1);
         if(body == 0){
-            printf("get_server_list realloc failed\n");
+            dbgprintf("get_server_list realloc failed\n");
             result = false; goto cleanup;
         }
         DWORD bytes_read;
         WinHttpReadData(request, body + body_length, bytes, &bytes_read);
         body_length += bytes_read;
-        //printf("read %u bytes\n", bytes_read);
+        //dbgprintf("read %u bytes\n", bytes_read);
     }
     body[body_length] = 0;
-    printf("got server list json, %u bytes\n", body_length);
+    dbgprintf("got server list json, %u bytes\n", body_length);
     if(length != 0) *length = body_length;
 cleanup:
     if(!result && body != 0){
@@ -443,12 +441,12 @@ void LoadServerListFromJSON(char* json, DWORD length)
 {
     cJSON* root = cJSON_ParseWithLength(json, length);
     if(root == 0){
-        printf("failed to parse root json object\n");
+        dbgprintf("failed to parse root json object\n");
         return;
     }
-    printf("parsed root object of type %d\n", root->type);
+    dbgprintf("parsed root object of type %d\n", root->type);
     if(!cJSON_IsArray(root)){
-        printf("root object is not array!\n");
+        dbgprintf("root object is not array!\n");
         goto cleanup;
     }
 
@@ -463,14 +461,14 @@ void LoadServerListFromJSON(char* json, DWORD length)
         cJSON* server = cJSON_GetArrayItem(root, i);
         cJSON* query = cJSON_GetObjectItem(server, "query");
         cJSON* queryPort = cJSON_GetObjectItem(server, "queryPort");
-        if(!query || !queryPort) { printf("malformed server data\n"); continue; }
+        if(!query || !queryPort) { dbgprintf("malformed server data\n"); continue; }
         cJSON* IP = cJSON_GetObjectItem(server, "IP");
         cJSON* hostport = cJSON_GetObjectItem(query, "hostport");
-        if(!(IP && hostport)) { printf("malformed query data\n"); continue; }
+        if(!(IP && hostport)) { dbgprintf("malformed query data\n"); continue; }
 
         struct QueryServer* svr = AddServer(cJSON_GetStringValue(IP), (unsigned short)cJSON_GetNumberValue(queryPort));
         if(!svr){
-            printf("AddServer failed for %s:%d\n", cJSON_GetStringValue(IP), (int)cJSON_GetNumberValue(queryPort));
+            dbgprintf("AddServer failed for %s:%d\n", cJSON_GetStringValue(IP), (int)cJSON_GetNumberValue(queryPort));
             continue;
         }
         svr->hostPort = (unsigned short)cJSON_GetNumberValue(hostport);
@@ -492,7 +490,7 @@ void LoadServerListFromJSON(char* json, DWORD length)
 
         cJSON* jplayers = cJSON_GetObjectItem(query, "players");
         if(!jplayers){
-            printf("%s:%d has no playerlist\n", cJSON_GetStringValue(IP), (int)cJSON_GetNumberValue(queryPort));
+            dbgprintf("%s:%d has no playerlist\n", cJSON_GetStringValue(IP), (int)cJSON_GetNumberValue(queryPort));
             continue;
         }
         unsigned int numPlayers = cJSON_GetArraySize(jplayers);
@@ -500,7 +498,7 @@ void LoadServerListFromJSON(char* json, DWORD length)
         if(numPlayers > 0) {
             struct QueryPlayer* players = AllocPlayers(numPlayers);
             if(!players){
-                printf("failed to allocate players structs for %s:%d\n", cJSON_GetStringValue(IP), (int)cJSON_GetNumberValue(queryPort));
+                dbgprintf("failed to allocate players structs for %s:%d\n", cJSON_GetStringValue(IP), (int)cJSON_GetNumberValue(queryPort));
                 continue;
             }
             for(unsigned int j = 0; j < numPlayers; j++){
@@ -536,7 +534,7 @@ void PopulateServerList()
         if(svr->ping != -1) _snwprintf(ping, 8, L"%d", svr->ping);
         else wcscpy(ping, L"?");
 
-        //printf("%-32s %3d / %-3d %s\n", cJSON_GetStringValue(hostname), (int)cJSON_GetNumberValue(numplayers), (int)cJSON_GetNumberValue(maxplayers), cJSON_GetStringValue(mapname));
+        //dbgprintf("%-32s %3d / %-3d %s\n", cJSON_GetStringValue(hostname), (int)cJSON_GetNumberValue(numplayers), (int)cJSON_GetNumberValue(maxplayers), cJSON_GetStringValue(mapname));
 
         LV_ITEM li = {0};
         li.mask = LVIF_TEXT;
@@ -591,7 +589,7 @@ void ReloadServers()
 
 void PulseSecond()
 {
-    printf("second\n");
+    dbgprintf("second\n");
     WaitForSingleObject(queryState->mutex, INFINITE);
 
     struct QueryServer* svr = GetSelectedServer();
@@ -621,7 +619,7 @@ void PulseSecond()
 
 void PulseTimer()
 {
-    //printf("pulse\n");
+    //dbgprintf("pulse\n");
     int selectedServer = GetSelectedServerID();
     WaitForSingleObject(queryState->mutex, INFINITE);
 
@@ -663,38 +661,9 @@ void PulseTimer()
     ReleaseMutex(queryState->mutex);
 }
 
-LONG __stdcall unhandled_exception_filter(LPEXCEPTION_POINTERS x){
-    EXCEPTION_RECORD* xr = x->ExceptionRecord;
-    //CONTEXT* ctx = x->ContextRecord;
-    static WCHAR msg[128];
-    int n = wsprintf(msg, L"\nexception %08X at %p", xr->ExceptionCode, xr->ExceptionAddress);
-    if(xr->ExceptionCode == EXCEPTION_ACCESS_VIOLATION){
-        n += wsprintf(msg + n, xr->ExceptionInformation[0] == 0 ? L" reading %p\n" : L" writing %p\n", (void*)xr->ExceptionInformation[1]);
-    }
-    MessageBox(0, msg, L"BF1942 Server browser", MB_ICONERROR);
-    HMODULE dbghelp = LoadLibraryA("dbghelp.dll");
-    if(dbghelp != 0){
-        typedef BOOL __stdcall MiniDumpWriteDump_t(HANDLE, DWORD, HANDLE, MINIDUMP_TYPE, PMINIDUMP_EXCEPTION_INFORMATION, PMINIDUMP_USER_STREAM_INFORMATION, PMINIDUMP_CALLBACK_INFORMATION);
-        MiniDumpWriteDump_t* pMiniDumpWriteDump = (MiniDumpWriteDump_t*)GetProcAddress(dbghelp, "MiniDumpWriteDump");
-        if(pMiniDumpWriteDump != 0){
-            HANDLE file = CreateFile(L"browser_crash.dmp", GENERIC_WRITE, 0, 0, CREATE_ALWAYS, 0, 0);
-            if(file != 0){
-                MINIDUMP_EXCEPTION_INFORMATION excinfo;
-                excinfo.ThreadId = GetCurrentThreadId();
-                excinfo.ExceptionPointers = x;
-                excinfo.ClientPointers = FALSE;
-                pMiniDumpWriteDump(GetCurrentProcess(), GetCurrentProcessId(), file, MiniDumpNormal | MiniDumpWithFullMemoryInfo | MiniDumpWithFullMemory, &excinfo, 0, 0);
-                CloseHandle(file);
-                return EXCEPTION_EXECUTE_HANDLER;
-            }
-        }
-    }
-    return EXCEPTION_CONTINUE_SEARCH;
-}
-
 int __stdcall WinMain(HINSTANCE instance, HINSTANCE previnstance, LPSTR commandline, int cmdshow)
 {
-    SetUnhandledExceptionFilter(unhandled_exception_filter);
+    InitCrashHandler();
 #ifdef DEBUG
     InitConsole();
 #endif

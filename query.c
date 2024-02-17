@@ -10,6 +10,7 @@
 #include <time.h>
 #include <WinSock2.h>
 #include "query.h"
+#include "debug.h"
 
 enum {
     QUERY_NONE = 0,
@@ -226,13 +227,13 @@ void SendServerQuery(struct QueryServer* svr, int type)
             addr.sin_port = htons(svr->hostPort);
             sendto(params.querysocket, buf, len, 0, (struct sockaddr*)&addr, sizeof(addr));
             svr->pingSendTime = ticks();
-            printf("SERVER_INFO_REQUEST to %s:%d\n", inet_ntoa(addr.sin_addr), ntohs(addr.sin_port));
+            dbgprintf("SERVER_INFO_REQUEST to %s:%d\n", inet_ntoa(addr.sin_addr), ntohs(addr.sin_port));
             svr->needPing = false;
             return;
         }
         default: return;
     }
-    printf("%s (%d) to %s:%d\n", buf, type, inet_ntoa(svr->queryAddress.sin_addr), ntohs(svr->queryAddress.sin_port));
+    dbgprintf("%s (%d) to %s:%d\n", buf, type, inet_ntoa(svr->queryAddress.sin_addr), ntohs(svr->queryAddress.sin_port));
     sendto(params.querysocket, buf, len, 0, (struct sockaddr*)&svr->queryAddress, sizeof(svr->queryAddress));
     svr->pendingQuery = type;
 }
@@ -246,14 +247,14 @@ void HandleInfoResponse(struct QueryServer* svr, char* data, size_t length)
         unsigned int index;
         
         if(data == 0){
-            printf("query end of data\n");
+            dbgprintf("query end of data\n");
             // end of data
             break;
         }
 
         char* key = GSParseNextKV(&data, &value, &index);
         if(key == 0) {
-            printf("query parse error\n");
+            dbgprintf("query parse error\n");
             // parse error
             break;
         }
@@ -271,7 +272,7 @@ void HandleInfoResponse(struct QueryServer* svr, char* data, size_t length)
         else if(!strcmp(key, "sv_punkbuster")) svr->punkbuster = strtol(value, 0, 10) != 0;
         else if(!strcmp(key, "final")) final = true;
         else continue;
-        //printf(" parsed %s[%i] = %s\n", key, index, value);
+        //dbgprintf(" parsed %s[%i] = %s\n", key, index, value);
     }
     if(final){        
         svr->pendingQuery = QUERY_NONE;
@@ -292,7 +293,7 @@ void HandlePlayersResponse(struct QueryServer* svr, char* data, size_t length)
 
         svr->playersNew = AllocPlayers(svr->playersNewLength);
         if(!svr->playersNew){
-            printf("HandlePlayersResponse AllocPlayers %u failed\n", svr->playersNewLength);
+            dbgprintf("HandlePlayersResponse AllocPlayers %u failed\n", svr->playersNewLength);
             svr->playersNewLength = 0;
             return;
         }
@@ -304,29 +305,29 @@ void HandlePlayersResponse(struct QueryServer* svr, char* data, size_t length)
         char* value;
         unsigned int index;
         if(data == 0){
-            printf("query end of data\n");
+            dbgprintf("query end of data\n");
             // end of data
             break;
         }
         char* key = GSParseNextKV(&data, &value, &index);
         if(key == 0) {
-            printf("query parse error\n");
+            dbgprintf("query parse error\n");
             goto fatal_parse_error;
         }
 
         if(!strcmp(key, "final")) {
             final = true;
-            printf("final!\n");
+            dbgprintf("final!\n");
             continue;
         } else if(!strcmp(key, "queryid")){
-            printf("queryid = %s\n", value);
+            dbgprintf("queryid = %s\n", value);
             char* p = strchr(value, '.');
             // make sure a dot is found and there are only 1 or 2 digits after it
             if((p++) && isdigit(p[0]) && (!p[1] || (isdigit(p[1]) && !p[2]))){
                 packetID = (uint8_t)strtoul(p, 0, 10);
             }
             if(packetID < 1 || packetID > 30){
-                printf("invalid packet id %u in queryid\n", packetID);
+                dbgprintf("invalid packet id %u in queryid\n", packetID);
                 goto fatal_parse_error;
             }
             continue;
@@ -337,13 +338,13 @@ void HandlePlayersResponse(struct QueryServer* svr, char* data, size_t length)
 
         // rest of the keys must have index
         if(index == GS_NO_INDEX) {
-            printf("key %s missing index\n", key);
+            dbgprintf("key %s missing index\n", key);
             goto fatal_parse_error;
         }
 
         // max index should be 255
         if(index > 255) {
-            printf("key %s has invalid index %u\n", key, index);
+            dbgprintf("key %s has invalid index %u\n", key, index);
             goto fatal_parse_error;
         }
 
@@ -351,10 +352,10 @@ void HandlePlayersResponse(struct QueryServer* svr, char* data, size_t length)
         // reallocate players buffer if index is out of range
         if(index >= svr->playersNewLength) {
             unsigned int newLength = index + 1;
-            printf("ReallocPlayers %u -> %u\n", svr->playersNewLength, newLength);
+            dbgprintf("ReallocPlayers %u -> %u\n", svr->playersNewLength, newLength);
             svr->playersNew = ReallocPlayers(svr->playersNew, svr->playersNewLength, newLength);
             if(!svr->playersNew){
-                printf("HandlePlayersResponse ReallocPlayers %u -> %u failed\n", svr->playersNewLength, newLength);
+                dbgprintf("HandlePlayersResponse ReallocPlayers %u -> %u failed\n", svr->playersNewLength, newLength);
                 svr->playersNewLength = 0;
                 return;
             }
@@ -363,7 +364,7 @@ void HandlePlayersResponse(struct QueryServer* svr, char* data, size_t length)
 #else
         // ignore if index outside buffer
         if(index >= svr->playersNewLength) {
-            printf("dropping garbage player index %u\n", index);
+            dbgprintf("dropping garbage player index %u\n", index);
             continue;
         }
 #endif
@@ -391,7 +392,7 @@ void HandlePlayersResponse(struct QueryServer* svr, char* data, size_t length)
         } else continue;
 
         if(svr->playersNewMaxIdx == GS_NO_INDEX || svr->playersNewMaxIdx < index) svr->playersNewMaxIdx = index;
-        //printf(" parsed %s[%i] = %s\n", key, index, value);
+        //dbgprintf(" parsed %s[%i] = %s\n", key, index, value);
     }
 
     // edge cases:
@@ -403,7 +404,7 @@ void HandlePlayersResponse(struct QueryServer* svr, char* data, size_t length)
     // - reordered packets: previous packets may arrive after final packet
 
     if(packetID == 0){
-        printf("no queryid parsed, missing packet id\n");
+        dbgprintf("no queryid parsed, missing packet id\n");
         goto fatal_parse_error;
     }
 
@@ -412,7 +413,7 @@ void HandlePlayersResponse(struct QueryServer* svr, char* data, size_t length)
 
     // check for duplicated packets
     if(svr->receivedPacketMask & (1 << packetID)){
-        printf("packet id %u already received\n", packetID + 1);
+        dbgprintf("packet id %u already received\n", packetID + 1);
         // maybe allow this, parsing a packet twice shouldn't cause any issues
         // but if this is a final packet it would trip the check below
         goto fatal_parse_error;
@@ -420,31 +421,31 @@ void HandlePlayersResponse(struct QueryServer* svr, char* data, size_t length)
 
     // add packet to received packets mask
     svr->receivedPacketMask |= 1 << packetID;
-    printf("registered packet %u -> %X\n", packetID, svr->receivedPacketMask);
+    dbgprintf("registered packet %u -> %X\n", packetID, svr->receivedPacketMask);
 
     if(final){       
         if(svr->finalPacketNumber != 255){
-            printf("multiple final packets\n");
+            dbgprintf("multiple final packets\n");
             goto fatal_parse_error;
         }
-        printf("final packet: %d\n", packetID);
+        dbgprintf("final packet: %d\n", packetID);
         svr->finalPacketNumber = packetID; 
     }
 
     if(svr->finalPacketNumber != 255){
         if(svr->finalPacketNumber < packetID){
-            printf("received packet ID %u higher than final packet id %u\n", packetID, svr->finalPacketNumber);
+            dbgprintf("received packet ID %u higher than final packet id %u\n", packetID, svr->finalPacketNumber);
             goto fatal_parse_error;
         }
 
         // we already got the last packet, check to see if we have all packets
         uint32_t maskAllPackets = (1 << (svr->finalPacketNumber + 1)) - 1;
         if(maskAllPackets != svr->receivedPacketMask){
-            printf("missing packets before final: %08X/%08X\n", maskAllPackets, svr->receivedPacketMask);
+            dbgprintf("missing packets before final: %08X/%08X\n", maskAllPackets, svr->receivedPacketMask);
             return;
         }
 
-        printf("HandlePlayersResponse all packets!\n");
+        dbgprintf("HandlePlayersResponse all packets!\n");
         if(svr->playersNew){
             if(svr->playersNewMaxIdx != GS_NO_INDEX){
                 unsigned int newLength = svr->playersNewMaxIdx + 1;
@@ -458,11 +459,11 @@ void HandlePlayersResponse(struct QueryServer* svr, char* data, size_t length)
                     svr->playersLength = newLength;
                     svr->playersUpdated = true;
                     svr->playersLastUpdated = seconds();
-                    printf("updated player list %u maxidx: %u\n", svr->playersLength, svr->playersNewMaxIdx);
+                    dbgprintf("updated player list %u maxidx: %u\n", svr->playersLength, svr->playersNewMaxIdx);
                 }
                 else {
                     svr->playersNew = 0;
-                    printf("ReallocPlayers failed in final\n");
+                    dbgprintf("ReallocPlayers failed in final\n");
                 }
             }
             else {
@@ -473,20 +474,20 @@ void HandlePlayersResponse(struct QueryServer* svr, char* data, size_t length)
                     svr->players = 0;
                 }
                 svr->playersLength = 0;
-                printf("no player indices, players cleared\n");
+                dbgprintf("no player indices, players cleared\n");
                 svr->playersUpdated = true;
                 svr->playersLastUpdated = seconds();
             }
         }
         else {
-            printf("playersNew is null!\n");
+            dbgprintf("playersNew is null!\n");
         }
         ResetPlayerQuery(svr);
         svr->pendingQuery = QUERY_NONE;
     }
     return;
 fatal_parse_error:
-    printf("HandlePlayersResponse fatal_parse_error\n");
+    dbgprintf("HandlePlayersResponse fatal_parse_error\n");
     ResetPlayerQuery(svr);
     svr->pendingQuery = QUERY_NONE;
 }
@@ -495,7 +496,7 @@ fatal_parse_error:
 void ResetPlayerQuery(struct QueryServer* svr)
 {
     if(svr->playersNew){
-        printf("ResetPlayerQuery freed playersNew\n");
+        dbgprintf("ResetPlayerQuery freed playersNew\n");
         free(svr->playersNew);
         svr->playersNew = 0;
     }
@@ -513,7 +514,7 @@ void ResetPendingQuery(struct QueryServer* svr)
 
 void HandleServerResponse(struct QueryServer* svr, char* data, size_t length)
 {
-    printf("response from %s:%d - %d\n", inet_ntoa(svr->queryAddress.sin_addr), ntohs(svr->queryAddress.sin_port), svr->pendingQuery);
+    dbgprintf("response from %s:%d - %d\n", inet_ntoa(svr->queryAddress.sin_addr), ntohs(svr->queryAddress.sin_port), svr->pendingQuery);
 
     if(svr->pendingQuery == QUERY_INFO){
         HandleInfoResponse(svr, data, length);
@@ -551,14 +552,14 @@ DWORD __stdcall QueryThreadMain(void* arg)
             FD_SET((unsigned)params.querysocket, &read);
             int result = select(params.querysocket + 1, &read, 0, 0, &sleeptime);
             if(result == -1){
-                printf("select failed\n");
+                dbgprintf("select failed\n");
                 return 1;
             }
             can_read = result > 0;
-            //printf("select says there is %s\n", can_read?"data":"no data");
+            //dbgprintf("select says there is %s\n", can_read?"data":"no data");
         }
         else {
-            printf("QueryThreadMain: no socket\n");
+            dbgprintf("QueryThreadMain: no socket\n");
             Sleep(100);
             continue;
         }
@@ -570,7 +571,7 @@ DWORD __stdcall QueryThreadMain(void* arg)
             for(;;) {
                 int recvlen = sizeof(remote);
                 res = recvfrom(params.querysocket, buffer, 1500, 0, (struct sockaddr*)&remote, &recvlen);
-                printf("data from %s:%d length %d err %d\n", inet_ntoa(remote.sin_addr), ntohs(remote.sin_port), res, WSAGetLastError());
+                dbgprintf("data from %s:%d length %d err %d\n", inet_ntoa(remote.sin_addr), ntohs(remote.sin_port), res, WSAGetLastError());
                 if(res < 0) break;
 
                 // is it a SERVER_INFO_RESPONSE from a game port? see QUERY_SERVER_INFO in SendServerQuery
@@ -581,7 +582,7 @@ DWORD __stdcall QueryThreadMain(void* arg)
                         svr->ping = (int16_t)(ticks() - svr->pingSendTime);
                         svr->pingSendTime = 0;
                         svr->pingUpdated = true;
-                        printf("SERVER_INFO_RESPONSE %dms\n", svr->ping);
+                        dbgprintf("SERVER_INFO_RESPONSE %dms\n", svr->ping);
                     }
                     continue;
                 }
@@ -613,7 +614,7 @@ DWORD __stdcall QueryThreadMain(void* arg)
         }
         ReleaseMutex(params.mutex);
     }
-    printf("QueryThreadMain exits\n");
+    dbgprintf("QueryThreadMain exits\n");
     return 0;
 }
 
@@ -634,7 +635,7 @@ struct QueryState* QueryInit()
 
     params.querysocket = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
     if(params.querysocket == -1){
-        printf("failed to create socket: %d\n", WSAGetLastError());
+        dbgprintf("failed to create socket: %d\n", WSAGetLastError());
         return &params;
     }
 
@@ -646,7 +647,7 @@ struct QueryState* QueryInit()
     if(bind(params.querysocket, (struct sockaddr*)&bindaddr, sizeof(bindaddr)) != 0){
         closesocket(params.querysocket);
         params.querysocket = -1;
-        printf("failed to bind socket: %d\n", WSAGetLastError());
+        dbgprintf("failed to bind socket: %d\n", WSAGetLastError());
         return &params;
     }
 
