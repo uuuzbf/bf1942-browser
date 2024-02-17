@@ -26,6 +26,16 @@ enum {
     ID_DISABLE_QUERY_THREAD_TIMER,
 };
 
+enum {
+    SERVERLIST_COL_ICONS = 0,
+    SERVERLIST_COL_SERVERNAME,
+    SERVERLIST_COL_PLAYERS,
+    SERVERLIST_COL_PING,
+    SERVERLIST_COL_MAP,
+    SERVERLIST_COL_GAMEMODE,
+    SERVERLIST_COL_MOD,
+};
+
 void ReloadServers();
 void PulseTimer();
 void PulseSecond();
@@ -538,22 +548,25 @@ void PopulateServerList()
         LV_ITEM li = {0};
         li.mask = LVIF_TEXT;
         li.iItem = i; // row number
-        li.iSubItem = 0; // server name column
-        li.pszText = svr->hostname;
+        li.iSubItem = SERVERLIST_COL_ICONS; // server name column
+        li.pszText = L"";
         ListView_InsertItem(serverlist, &li);
-        li.iSubItem = 1; // players
+        li.iSubItem = SERVERLIST_COL_SERVERNAME; // server name column
+        li.pszText = svr->hostname;
+        ListView_SetItem(serverlist, &li);
+        li.iSubItem = SERVERLIST_COL_PLAYERS; // players
         li.pszText = players;
         ListView_SetItem(serverlist, &li);
-        li.iSubItem = 2; // ping
+        li.iSubItem = SERVERLIST_COL_PING; // ping
         li.pszText = ping;
         ListView_SetItem(serverlist, &li);
-        li.iSubItem = 3; // map
+        li.iSubItem = SERVERLIST_COL_MAP; // map
         li.pszText = svr->mapname;
         ListView_SetItem(serverlist, &li);
-        li.iSubItem = 4; // gamemode
+        li.iSubItem = SERVERLIST_COL_GAMEMODE; // gamemode
         li.pszText = svr->gamemode;
         ListView_SetItem(serverlist, &li);
-        li.iSubItem = 5; // mod
+        li.iSubItem = SERVERLIST_COL_MOD; // mod
         li.pszText = svr->modname;
         ListView_SetItem(serverlist, &li);
 
@@ -619,17 +632,22 @@ void PulseTimer()
         if(svr->pingUpdated){
             WCHAR ping[8];
             _snwprintf(ping, 8, L"%d", svr->ping);
-            ListView_SetItemText(serverlist, i, 2, ping);
+            ListView_SetItemText(serverlist, i, SERVERLIST_COL_PING, ping);
             svr->pingUpdated = false;
         }
         if(svr->infoUpdated){
-            ListView_SetItemText(serverlist, i, 0, svr->hostname);
+            WCHAR icontext[16];
+            icontext[0] = 0;
+            if(svr->punkbuster)wcscat(icontext, L"PB ");
+            if(svr->passworded)wcscat(icontext, L"Pw");
+            ListView_SetItemText(serverlist, i, SERVERLIST_COL_ICONS, icontext);
+            ListView_SetItemText(serverlist, i, SERVERLIST_COL_SERVERNAME, svr->hostname);
             WCHAR players[32];
             _snwprintf(players, 32, L"%d / %d", svr->playerCount, svr->maxPlayers);
-            ListView_SetItemText(serverlist, i, 1, players);
-            ListView_SetItemText(serverlist, i, 3, svr->mapname);
-            ListView_SetItemText(serverlist, i, 4, svr->gamemode);
-            ListView_SetItemText(serverlist, i, 5, svr->modname);
+            ListView_SetItemText(serverlist, i, SERVERLIST_COL_PLAYERS, players);
+            ListView_SetItemText(serverlist, i, SERVERLIST_COL_MAP, svr->mapname);
+            ListView_SetItemText(serverlist, i, SERVERLIST_COL_GAMEMODE, svr->gamemode);
+            ListView_SetItemText(serverlist, i, SERVERLIST_COL_MOD, svr->modname);
 
             svr->infoUpdated = false;
 
@@ -721,27 +739,31 @@ int __stdcall WinMain(HINSTANCE instance, HINSTANCE previnstance, LPSTR commandl
     LVCOLUMN col;
     col.mask = LVCF_FMT | LVCF_WIDTH | LVCF_TEXT;
     col.fmt = LVCFMT_LEFT;
-    col.iSubItem = 0;
+    col.iSubItem = SERVERLIST_COL_ICONS;
+    col.pszText = L"";
+    col.cx = 40;
+    ListView_InsertColumn(serverlist, col.iSubItem, &col);
+    col.iSubItem = SERVERLIST_COL_SERVERNAME;
     col.pszText = L"Server name";
     col.cx = 215;
     ListView_InsertColumn(serverlist, col.iSubItem, &col);
-    col.iSubItem = 1;
+    col.iSubItem = SERVERLIST_COL_PLAYERS;
     col.pszText = L"Players";
     col.cx = 50;
     ListView_InsertColumn(serverlist, col.iSubItem, &col);
-    col.iSubItem = 2;
+    col.iSubItem = SERVERLIST_COL_PING;
     col.pszText = L"Ping";
     col.cx = 40;
     ListView_InsertColumn(serverlist, col.iSubItem, &col);
-    col.iSubItem = 3;
+    col.iSubItem = SERVERLIST_COL_MAP;
     col.pszText = L"Map";
-    col.cx = 160;
+    col.cx = 120;
     ListView_InsertColumn(serverlist, col.iSubItem, &col);
-    col.iSubItem = 4;
+    col.iSubItem = SERVERLIST_COL_GAMEMODE;
     col.pszText = L"Gamemode";
     col.cx = 90;
     ListView_InsertColumn(serverlist, col.iSubItem, &col);
-    col.iSubItem = 5;
+    col.iSubItem = SERVERLIST_COL_MOD;
     col.pszText = L"Mod";
     col.cx = 85;
     ListView_InsertColumn(serverlist, col.iSubItem, &col);
