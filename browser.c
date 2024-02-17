@@ -595,18 +595,8 @@ void PulseSecond()
     struct QueryServer* svr = GetSelectedServer();
     if(svr){
         if(svr->pendingQuery == 0){
-            if(svr->playerCount != 0 && 
-                (svr->playersLastUpdated == 0 ||
-                (seconds() - svr->playersLastUpdated) > 15) ||
-                svr->playerCount != svr->playersLength)
-            {
-                svr->needPlayers = true;
-
-            }
-            else {
-                svr->needInfo = true;
-                svr->needPing = true;
-            }
+            svr->needInfo = true;
+            svr->needPing = true;
         }
         else {
             // probably a timeout or error occured, reset pending query so next time new requests are sent
@@ -642,10 +632,23 @@ void PulseTimer()
             ListView_SetItemText(serverlist, i, 4, svr->gamemode);
             ListView_SetItemText(serverlist, i, 5, svr->modname);
 
+            svr->infoUpdated = false;
+
             if(i == selectedServer){
                 UpdateServerInfo(svr);
+
+                // if player count not zero, check if the playerlist needs an update:
+                // - if the list was never updated
+                // - the list was updated more than 15 seconds ago
+                // - the player count is different from the list length
+                if(svr->playerCount != 0 && (
+                    svr->playersLastUpdated == 0 ||
+                    (seconds() - svr->playersLastUpdated) > 15 ||
+                    svr->playerCount != svr->playersLength))
+                {
+                    svr->needPlayers = true;
+                }
             }
-            svr->infoUpdated = false;
         }
         if(svr->playersUpdated){
             ListView_DeleteAllItems(playerlist);
