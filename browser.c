@@ -171,6 +171,8 @@ void PopulatePlayerList(struct QueryServer* svr)
 {
     // if there are no players on the server this array will be missing
     if(svr->players != 0){
+        ListView_SetItemCount(playerlist, svr->playersLength);
+
         for(unsigned i = 0; i < svr->playersLength; i++){
             struct QueryPlayer* player = svr->players + i;
 
@@ -500,6 +502,11 @@ cleanup:
 // needs query mutex lock
 void PopulateServerList()
 {
+    // count servers and tell the ListView how many items will be added
+    int numServers = 0;
+    for(struct QueryServer* svr = GetServerByIndex(0); svr != 0; svr = svr->next) numServers++;
+    if(numServers > 0)ListView_SetItemCount(serverlist, numServers);
+
     int i = 0;
     for(struct QueryServer* svr = GetServerByIndex(0); svr != 0; svr = svr->next, i++){
         WCHAR players[32];
