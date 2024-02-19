@@ -313,12 +313,17 @@ LRESULT __stdcall WndProcMain(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
         case WM_COMMAND:
             dbgprintf("WM_COMMAND: %d\n", wParam);
             if(wParam == IDCLOSE){
+                dbgprintf("IDCLOSE received \n");
                 DestroyWindow(hwnd);
+                dbgprintf("window destroyed\n");
             } else if(wParam == ID_REFRESHBTN){
                 ReloadServers();
             } else if(wParam == ID_ADDRESSLABEL){
                 CopySelectedServerAddress();
             }
+            break;
+        case WM_CLOSE:
+            dbgprintf("WM_CLOSE\n");
             break;
         case WM_ACTIVATE:
         //    dbgprintf("ACTIVATE %p state %d to %08X\n", hwnd, wParam, lParam);
