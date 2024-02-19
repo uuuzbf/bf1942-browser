@@ -48,6 +48,8 @@ HWND addresslabel = 0;
 HWND serverinfolabel = 0;
 //cJSON* serverdata = 0;
 struct QueryState* queryState = 0;
+int serverListSortColumn = SERVERLIST_COL_PLAYERS;
+bool serverListSortAscending = false;
 
 
 void initBF1942Path()
@@ -120,12 +122,25 @@ struct QueryServer* GetSelectedServer()
     //dbgprintf("ConnectToServer selectedServer = %d\n", selectedServer);
     if(selectedServer < 0) return 0;
     
-    struct QueryServer* svr = GetServerByIndex(selectedServer);
+    LVITEM item = {0};
+    item.iItem = selectedServer;
+    item.mask = LVIF_PARAM;
+    ListView_GetItem(serverlist, &item);
+    struct QueryServer* svr = (void*)item.lParam;
     if(!svr){
         dbgprintf("GetSelectedServer - unknown server\n");
         return 0;
     }
     return svr;
+}
+
+// returns -1 if the server was not found
+int GetServerID(struct QueryServer* svr)
+{
+    LVFINDINFO info = {0};
+    info.flags = LVFI_PARAM;
+    info.lParam = (LPARAM)svr;
+    return ListView_FindItem(serverlist, -1, &info);
 }
 
 void CopySelectedServerAddress()
@@ -210,12 +225,12 @@ void PopulatePlayerList(struct QueryServer* svr)
     }
 }
 
-void SelectServer(int index)
+void SelectServer()
 {
-    dbgprintf("selecting server %d\n", index);
+    dbgprintf("selecting server !\n");
     ListView_DeleteAllItems(playerlist);
 
-    struct QueryServer* svr = GetServerByIndex(index);
+    struct QueryServer* svr = GetSelectedServer();
     if(!svr){
         dbgprintf("ConnectToServer - unknown server\n");
         return;
@@ -275,6 +290,24 @@ void ConnectToServer()
     }
 }
 
+int CALLBACK ServerList_Compare(LPARAM lParam1, LPARAM lParam2, LPARAM lParamSort)
+{
+    struct QueryServer* left = (void*)lParam1;
+    struct QueryServer* right = (void*)lParam2;
+    int result;
+    switch(serverListSortColumn){
+        default: // should not happen, use server name
+        case SERVERLIST_COL_SERVERNAME: result = _wcsicmp(left->hostname, right->hostname); break;
+        case SERVERLIST_COL_PLAYERS: result = (left->playerCount > right->playerCount) - (left->playerCount < right->playerCount); break;
+        case SERVERLIST_COL_PING: result = ((uint16_t)left->ping > (uint16_t)right->ping) - ((uint16_t)left->ping < (uint16_t)right->ping); break;
+        case SERVERLIST_COL_GAMEMODE: result = _wcsicmp(left->gamemode, right->gamemode); break;
+        case SERVERLIST_COL_MAP: result = _wcsicmp(left->mapname, right->mapname); break;
+        case SERVERLIST_COL_MOD: result = _wcsicmp(left->modname, right->modname); break;
+    }
+    if(!serverListSortAscending) result = -result;
+    return result;
+}
+
 void __stdcall ListViewNotify(NMHDR* notify)
 {
     //dbgprintf("WM_NOTIFY: code=%d hwnd=%p id=%d\n", notify->code, notify->hwndFrom, notify->idFrom);
@@ -291,7 +324,7 @@ void __stdcall ListViewNotify(NMHDR* notify)
             //dbgprintf("statechange %08X -> %08X %d-%d\n", ch->uOldState, ch->uNewState, ch->iFrom, ch->iTo);
             if((ch->uNewState & LVIS_SELECTED) && !(ch->uOldState & LVIS_SELECTED)){
                 if(ch->iFrom != ch->iTo)MessageBox(0, L"wat", L"????", MB_ICONQUESTION);
-                SelectServer(ch->iFrom);
+                SelectServer();
             }
             break;
         }
@@ -299,10 +332,27 @@ void __stdcall ListViewNotify(NMHDR* notify)
             NMLISTVIEW* lv = (NMLISTVIEW*)notify;
             //dbgprintf("itemchanged %d %d %08X -> %08X\n", lv->iItem, lv->iSubItem, lv->uOldState, lv->uNewState);
             if((lv->uNewState & LVIS_SELECTED) && !(lv->uOldState & LVIS_SELECTED)){
-                SelectServer(lv->iItem);
+                SelectServer();
             }
             break;
         }
+        case LVN_COLUMNCLICK:{
+            int column = ((NMLISTVIEW*)notify)->iSubItem;
+            dbgprintf("serverlist column %d clicked\n", column);
+            if(column == SERVERLIST_COL_ICONS) break; // cannot sort by the first column
+            if(column == serverListSortColumn) serverListSortAscending = !serverListSortAscending;
+            else {
+                serverListSortColumn = column;
+                // for players column make descending the default because it makes more sense, use ascending for the rest
+                if(column == SERVERLIST_COL_PLAYERS) serverListSortAscending = false;
+                else serverListSortAscending = true;
+            }
+            WaitForSingleObject(queryState->mutex, INFINITE);
+            ListView_SortItems(serverlist, ServerList_Compare, 0);
+            ReleaseMutex(queryState->mutex);
+            break;
+        }
+
 
     }
 }
@@ -466,6 +516,8 @@ void LoadServerListFromJSON(char* json, DWORD length)
     ListView_DeleteAllItems(serverlist);
     ListView_DeleteAllItems(playerlist);
     SetWindowText(addresslabel, L"Select a server");
+    serverListSortColumn = SERVERLIST_COL_PLAYERS;
+    serverListSortAscending = false;
 
     RemoveAllServers();
 
@@ -558,11 +610,16 @@ void PopulateServerList()
         if(svr->passworded)wcscat(icontext, L"Pw");
 
         LV_ITEM li = {0};
-        li.mask = LVIF_TEXT;
+        li.mask = LVIF_TEXT | LVIF_PARAM;
         li.iItem = i; // row number
+        li.lParam = (LPARAM)svr;
         li.iSubItem = SERVERLIST_COL_ICONS; // server name column
         li.pszText = icontext;
         ListView_InsertItem(serverlist, &li);
+
+        li.mask = LVIF_TEXT;
+        li.lParam = 0;
+
         li.iSubItem = SERVERLIST_COL_SERVERNAME; // server name column
         li.pszText = svr->hostname;
         ListView_SetItem(serverlist, &li);
@@ -634,36 +691,44 @@ void PulseSecond()
 void PulseTimer()
 {
     //dbgprintf("pulse\n");
-    int selectedServer = GetSelectedServerID();
+    int selectedServerID = GetSelectedServerID();
     WaitForSingleObject(queryState->mutex, INFINITE);
 
-    int i = 0;
     // prevent flickering while the list is updated
     SendMessage(serverlist, WM_SETREDRAW, false, 0);
-    for(struct QueryServer* svr = GetServerByIndex(0); svr != 0; svr = svr->next, i++){
+    for(struct QueryServer* svr = GetServerByIndex(0); svr != 0; svr = svr->next){
+        int rowid = -1;
         if(svr->pingUpdated){
+            svr->pingUpdated = false;
+
+            rowid = GetServerID(svr);
+            if(rowid == -1) continue;
             WCHAR ping[8];
             _snwprintf(ping, 8, L"%d", svr->ping);
-            ListView_SetItemText(serverlist, i, SERVERLIST_COL_PING, ping);
-            svr->pingUpdated = false;
+            ListView_SetItemText(serverlist, rowid, SERVERLIST_COL_PING, ping);
         }
         if(svr->infoUpdated){
+            svr->infoUpdated = false;
+
+            if(rowid == -1){
+                rowid = GetServerID(svr);
+                if(rowid == -1) continue;
+            }
+
             WCHAR icontext[16];
             icontext[0] = 0;
             if(svr->punkbuster)wcscat(icontext, L"PB ");
             if(svr->passworded)wcscat(icontext, L"Pw");
-            ListView_SetItemText(serverlist, i, SERVERLIST_COL_ICONS, icontext);
-            ListView_SetItemText(serverlist, i, SERVERLIST_COL_SERVERNAME, svr->hostname);
+            ListView_SetItemText(serverlist, rowid, SERVERLIST_COL_ICONS, icontext);
+            ListView_SetItemText(serverlist, rowid, SERVERLIST_COL_SERVERNAME, svr->hostname);
             WCHAR players[32];
             _snwprintf(players, 32, L"%d / %d", svr->playerCount, svr->maxPlayers);
-            ListView_SetItemText(serverlist, i, SERVERLIST_COL_PLAYERS, players);
-            ListView_SetItemText(serverlist, i, SERVERLIST_COL_MAP, svr->mapname);
-            ListView_SetItemText(serverlist, i, SERVERLIST_COL_GAMEMODE, svr->gamemode);
-            ListView_SetItemText(serverlist, i, SERVERLIST_COL_MOD, svr->modname);
+            ListView_SetItemText(serverlist, rowid, SERVERLIST_COL_PLAYERS, players);
+            ListView_SetItemText(serverlist, rowid, SERVERLIST_COL_MAP, svr->mapname);
+            ListView_SetItemText(serverlist, rowid, SERVERLIST_COL_GAMEMODE, svr->gamemode);
+            ListView_SetItemText(serverlist, rowid, SERVERLIST_COL_MOD, svr->modname);
 
-            svr->infoUpdated = false;
-
-            if(i == selectedServer){
+            if(rowid == selectedServerID){
                 UpdateServerInfo(svr);
 
                 // if player count not zero, check if the playerlist needs an update:
@@ -680,13 +745,18 @@ void PulseTimer()
             }
         }
         if(svr->playersUpdated){
-            if(i == selectedServer){
+            svr->playersUpdated = false;
+
+            if(rowid == -1){
+                rowid = GetServerID(svr);
+                if(rowid == -1) continue;
+            }
+
+            if(rowid == selectedServerID){
                 ListView_DeleteAllItems(playerlist);
                 SortPlayers(svr->players, svr->playerCount);
                 PopulatePlayerList(svr);
             }
-
-            svr->playersUpdated = false;
         }
     }
     
