@@ -171,8 +171,11 @@ void UpdateServerInfo(struct QueryServer* svr)
     }
     else wcscat_s(serverinfo, 64, L" Timer: none");
 
-    if(svr->punkbuster) wcscat_s(serverinfo, 64, L" [PB]");
-    if(svr->passworded) wcscat_s(serverinfo, 64, L" [PW]");
+    //if(svr->punkbuster) wcscat_s(serverinfo, 64, L" [PB]");
+    //if(svr->passworded) wcscat_s(serverinfo, 64, L" [PW]");
+
+    static const WCHAR* gameStateStrings[] = {L" PREGAME", L"" /* PLAYING */, L" ENDGAME", L" PAUSED", L"" /* UNKNOWN */};
+    wcscat_s(serverinfo, 64, gameStateStrings[svr->gameState]);
 
     SetWindowText(serverinfolabel, serverinfo);
 }
@@ -487,6 +490,7 @@ void LoadServerListFromJSON(char* json, DWORD length)
         svr->roundTimeRemaining = (int)cJSON_GetNumberValue(cJSON_GetObjectItem(query, "roundTimeRemain"));
         svr->punkbuster = cJSON_IsTrue(cJSON_GetObjectItem(query, "sv_punkbuster"));
         svr->passworded = cJSON_IsTrue(cJSON_GetObjectItem(query, "password"));
+        svr->gameState = ParseGameState(cJSON_GetStringValue(cJSON_GetObjectItem(query, "gamemode")));
 
         // request info query from server
         svr->needInfo = true;

@@ -2,6 +2,13 @@
 #include <windows.h>
 #include <stdint.h>
 
+enum GameState {
+    GS_PREGAME = 0,
+    GS_PLAYING,
+    GS_ENDGAME,
+    GS_PAUSED,
+    GS_UNKNOWN,
+};
 
 struct QueryPlayer {
     WCHAR name[32];
@@ -23,6 +30,7 @@ struct QueryServer {
     int roundTimeRemaining;
     bool punkbuster;
     bool passworded;
+    uint8_t gameState;
     struct sockaddr_in queryAddress;
     unsigned int pingSendTime;
     unsigned int playersLastUpdated;
@@ -55,6 +63,8 @@ struct QueryState {
 
 unsigned int seconds();
 void UTF8ToWideBuffer(const char* str, WCHAR* outbuff, int outbufflen);
+
+enum GameState ParseGameState(const char* gamestate);
 
 struct QueryPlayer* AllocPlayers(unsigned int count);
 void SortPlayers(struct QueryPlayer* players, unsigned int count);

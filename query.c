@@ -81,6 +81,17 @@ void BF1942StringToWideBuffer(const char* str, WCHAR*outbuff, int outbufflen)
     *outbuff = 0;
 }
 
+enum GameState ParseGameState(const char* gamestate)
+{
+    if(gamestate){
+        if(!strcmp(gamestate, "openplaying") || !strcmp(gamestate, "closedplaying")) return GS_PLAYING;
+        if(!strcmp(gamestate, "pre")) return GS_PREGAME;
+        if(!strcmp(gamestate, "end")) return GS_ENDGAME;
+        if(!strcmp(gamestate, "pause")) return GS_PAUSED;
+    }
+    return GS_UNKNOWN;
+}
+
 // parses \key_INDEX\value\ into key, INDEX and value
 #define GS_NO_INDEX (~(unsigned int)0)
 char* GSParseNextKV(char** source, char** value, unsigned int* index)
@@ -270,6 +281,7 @@ void HandleInfoResponse(struct QueryServer* svr, char* data, size_t length)
         else if(!strcmp(key, "tickets2")) svr->tickets[1] = strtol(value, 0, 10);
         else if(!strcmp(key, "password")) svr->passworded = strtol(value, 0, 10) != 0;
         else if(!strcmp(key, "sv_punkbuster")) svr->punkbuster = strtol(value, 0, 10) != 0;
+        else if(!strcmp(key, "gamemode")) svr->gameState = ParseGameState(value);
         else if(!strcmp(key, "final")) final = true;
         else continue;
         //dbgprintf(" parsed %s[%i] = %s\n", key, index, value);
