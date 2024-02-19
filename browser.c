@@ -547,13 +547,16 @@ void PopulateServerList()
         if(svr->ping != -1) _snwprintf(ping, 8, L"%d", svr->ping);
         else wcscpy(ping, L"?");
 
-        //dbgprintf("%-32s %3d / %-3d %s\n", cJSON_GetStringValue(hostname), (int)cJSON_GetNumberValue(numplayers), (int)cJSON_GetNumberValue(maxplayers), cJSON_GetStringValue(mapname));
+        WCHAR icontext[16];
+        icontext[0] = 0;
+        if(svr->punkbuster)wcscat(icontext, L"PB ");
+        if(svr->passworded)wcscat(icontext, L"Pw");
 
         LV_ITEM li = {0};
         li.mask = LVIF_TEXT;
         li.iItem = i; // row number
         li.iSubItem = SERVERLIST_COL_ICONS; // server name column
-        li.pszText = L"";
+        li.pszText = icontext;
         ListView_InsertItem(serverlist, &li);
         li.iSubItem = SERVERLIST_COL_SERVERNAME; // server name column
         li.pszText = svr->hostname;
