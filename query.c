@@ -61,7 +61,7 @@ void BF1942StringToWideBuffer(const char* str, WCHAR*outbuff, int outbufflen)
     int cyrillicCount = 0;
     for(const uint8_t* c = (const uint8_t*)str; *c; c++){
         uint8_t C = *c;
-        if((C >= 'A' && C <= 'Z') || (C >= 'a' && C <= 'Z')) latinCount++;
+        if((C >= 'A' && C <= 'Z') || (C >= 'a' && C <= 'z')) latinCount++;
         else if(C >= 0xC0) cyrillicCount++; // codes above 0xC0 are used for cyrillic
     }
     bool isCyrillic = (latinCount + cyrillicCount) > 0 && (((float)cyrillicCount / (latinCount + cyrillicCount)) >= 0.8);
