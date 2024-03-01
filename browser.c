@@ -754,8 +754,10 @@ void PulseTimer()
 
             if(rowid == selectedServerID){
                 ListView_DeleteAllItems(playerlist);
-                SortPlayers(svr->players, svr->playerCount);
-                PopulatePlayerList(svr);
+                if(svr->players){
+                    SortPlayers(svr->players, svr->playersLength);
+                    PopulatePlayerList(svr);
+                }
             }
         }
     }
