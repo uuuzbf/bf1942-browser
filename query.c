@@ -295,6 +295,7 @@ void HandleInfoResponse(struct QueryServer* svr, char* data, size_t length)
             free(svr->players);
             svr->players = 0;
             svr->playersLength = 0;
+            svr->playersUpdated = true;
         }
     }
 }
