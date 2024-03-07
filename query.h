@@ -33,6 +33,7 @@ struct QueryServer {
     uint8_t gameState;
     struct sockaddr_in queryAddress;
     unsigned int pingSendTime;
+    unsigned int infoLastUpdated;
     unsigned int playersLastUpdated;
     unsigned int pendingQuery;
     bool pingUpdated;

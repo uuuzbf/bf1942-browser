@@ -289,6 +289,7 @@ void HandleInfoResponse(struct QueryServer* svr, char* data, size_t length)
     if(final){        
         svr->pendingQuery = QUERY_NONE;
         svr->infoUpdated = true;
+        svr->infoLastUpdated = seconds();
 
         // delete players array if player count is zero
         if(svr->playerCount == 0 && svr->players){

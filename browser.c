@@ -679,15 +679,25 @@ void PulseSecond()
     dbgprintf("second\n");
     WaitForSingleObject(queryState->mutex, INFINITE);
 
-    struct QueryServer* svr = GetSelectedServer();
-    if(svr){
-        if(svr->pendingQuery == 0){
-            svr->needInfo = true;
-            svr->needPing = true;
+    struct QueryServer* selected = GetSelectedServer();
+    if(selected){
+        if(selected->pendingQuery == 0){
+            selected->needInfo = true;
+            selected->needPing = true;
         }
         else {
             // probably a timeout or error occured, reset pending query so next time new requests are sent
-            ResetPendingQuery(svr);
+            ResetPendingQuery(selected);
+        }
+    }
+
+    unsigned int now = seconds();
+    for(struct QueryServer* svr = GetServerByIndex(0); svr != 0; svr = svr->next){
+        if(svr != selected){
+            if(svr->pendingQuery == 0 && (now - svr->infoLastUpdated) > 90){
+                svr->needInfo = true;
+                svr->needPing = true;
+            }
         }
     }
 
