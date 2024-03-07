@@ -374,6 +374,10 @@ LRESULT __stdcall WndProcMain(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             break;
         case WM_CLOSE:
             dbgprintf("WM_CLOSE\n");
+            // sometimes when closing the window, the process lingers, maybe due to the query thread?
+            // make sure the process exits
+            // TODO find a better way to do this, fix the cause
+            ExitProcess(0);
             break;
         case WM_ACTIVATE:
         //    dbgprintf("ACTIVATE %p state %d to %08X\n", hwnd, wParam, lParam);
