@@ -385,11 +385,13 @@ LRESULT __stdcall WndProcMain(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
                 SetTimer(mainwindow, ID_PULSE_TIMER, 200, 0);
                 SetTimer(mainwindow, ID_SECOND_TIMER, 2000, 0);
                 // enable query thread and kill the disable timer if it exists
+                KillTimer(mainwindow, ID_DISABLE_QUERY_THREAD_TIMER);
                 if(queryState){
                     SetEvent(queryState->sleepevent);
                     queryState->wantSleep = false;
+                    // request sending queries right away to update faster after switching to window
+                    PulseSecond();
                 }
-                KillTimer(mainwindow, ID_DISABLE_QUERY_THREAD_TIMER);
             }
             else if(wParam == WA_INACTIVE){
                 KillTimer(mainwindow, ID_PULSE_TIMER);
