@@ -709,6 +709,7 @@ void PulseTimer()
     //dbgprintf("pulse\n");
     int selectedServerID = GetSelectedServerID();
     WaitForSingleObject(queryState->mutex, INFINITE);
+    bool sortServers = false;
 
     // prevent flickering while the list is updated
     SendMessage(serverlist, WM_SETREDRAW, false, 0);
@@ -730,6 +731,8 @@ void PulseTimer()
                 rowid = GetServerID(svr);
                 if(rowid == -1) continue;
             }
+
+            sortServers = true;
 
             WCHAR icontext[16];
             icontext[0] = 0;
@@ -776,6 +779,9 @@ void PulseTimer()
                 }
             }
         }
+    }
+    if(sortServers){
+        ListView_SortItems(serverlist, ServerList_Compare, 0);
     }
     
     SendMessage(serverlist, WM_SETREDRAW, true, 0);
